@@ -26,13 +26,37 @@ Scale and crop must be tunable without code changes, via a config file read at s
 2. Play both simultaneously, one per monitor, full-screen, with config applied
 3. Validate scale, crop, orientation and sync
 
-## Method Options
-- **VLC** — fast to test but limited programmatic control over scale/crop
-- **Python + pygame** — two windows, full control over transform parameters ✓
-- **Python + OpenCV** — similar, `cv2.moveWindow()` for monitor placement ✓
+## Method
+Python + OpenCV. Videos are pre-generated at the target monitor resolution and played
+back by the player. Generation and playback are independent steps.
 
-Recommendation: go with Python + pygame or OpenCV from the start given the 
-adjustability requirement — VLC won't scale well into this.
+## Running
+
+All commands from repo root.
+
+**1. Edit config** (`spikes/display_validation/config.toml`) — set `video_width` and
+`video_height` to match the target monitor resolution before generating.
+
+**2. Generate test videos** (re-run whenever config dimensions change):
+
+```sh
+uv run spikes/display_validation/generate_test_videos.py
+```
+
+**3. Run the player:**
+
+```sh
+uv run spikes/display_validation/player.py
+```
+
+Two windows open ("SCREEN A" and "SCREEN B"). Videos loop automatically.
+Press `Q` (with an OpenCV window focused) or `Ctrl+C` in the terminal to quit.
+
+**On a laptop:** both windows appear on the same screen — fine for a basic sanity check.
+
+**For dual-monitor validation:** drag each window to its target monitor and fullscreen
+via the OS (macOS: `Ctrl+Cmd+F`). Set `window_width`/`window_height` in config to
+the monitor resolution so the window opens at the right size.
 
 ## Success Criteria
 - Both monitors display full-screen portrait video simultaneously

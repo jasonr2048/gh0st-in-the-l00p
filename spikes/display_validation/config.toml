@@ -1,0 +1,18 @@
+# Video generation — run generate_test_videos.py to produce the files.
+# Set width/height to match the target monitor resolution.
+
+[screen_a]
+video_path = "spikes/display_validation/assets/face_a.avi"
+video_width = 1080
+video_height = 1920
+fps = 30
+window_width = 405
+window_height = 720
+
+[screen_b]
+video_path = "spikes/display_validation/assets/face_b.avi"
+video_width = 1080
+video_height = 1920
+fps = 30
+window_width = 405
+window_height = 720
