@@ -1,1 +1,5 @@
 .DS_Store
+.idea/
+.venv/
+spikes/display_validation/assets/
+uv.lock
