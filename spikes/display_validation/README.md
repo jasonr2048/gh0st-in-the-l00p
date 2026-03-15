@@ -64,6 +64,16 @@ the monitor resolution so the window opens at the right size.
 - Correct orientation confirmed
 - No significant lag or sync drift between the two
 
+## Outcome
+**Status:** Partially validated — single-screen only, dual-monitor pending hardware
+
+- Both windows play simultaneously and loop correctly
+- Video and window dimensions must match the actual monitor resolution in config —
+  this is what makes the video fill the screen correctly; other approaches did not work
+- Aspect ratio is fixed by the config dimensions (which should match the monitor's
+  native ratio); not adjustable at runtime
+- See `docs/spike_findings.md` for the summary
+
 ## Next Step
 → Video generation spike (AI-generated face-like visuals, noise/static, portrait format)
 
