@@ -1,5 +1,9 @@
 .DS_Store
 .idea/
 .venv/
-spikes/display_validation/assets/
+*.ipynb_checkpoints
+.ipynb_checkpoints/
 uv.lock
+
+# Data
+spikes/display_validation/assets/
