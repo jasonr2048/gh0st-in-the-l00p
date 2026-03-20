@@ -30,7 +30,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageFile
+from PIL import Image, ImageFile, ImageOps
 from ultralytics import YOLO
 
 # Allow large images without error
@@ -140,7 +140,7 @@ def process_image(path: Path, input_dir: Path, output_dir: Path,
         return "skipped"
 
     try:
-        image = Image.open(path).convert("RGB")
+        image = ImageOps.exif_transpose(Image.open(path).convert("RGB"))
         small, scale_x, scale_y = downsample_for_detection(image)
 
         # Save small version temporarily for YOLO (needs a file path)
