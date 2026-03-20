@@ -61,7 +61,7 @@ def get_head_keypoints(path: Path, pose_model, scale_x: float, scale_y: float):
     Returns list of (x, y) or None if nothing detected.
     """
     results = pose_model(str(path), verbose=False)
-    if results[0].keypoints is None:
+    if results[0].keypoints is None or len(results[0].keypoints.xy) == 0:
         return None
 
     kpts = results[0].keypoints.xy[0].tolist()
