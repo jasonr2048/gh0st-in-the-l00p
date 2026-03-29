@@ -28,3 +28,24 @@ to Drive for A's visibility. Single source of truth, no duplication.
 **Decision:** Face display scale, crop, and position always driven by a config file,
 never hardcoded.
 **Rationale:** On-site tuning needed once installed in actual space with actual monitors.
+
+## 2026-03-30
+
+### GAN inversion with FFHQ pretrained model — not viable
+**Finding:** Direct projection of A's images into FFHQ latent space produces
+unrecognisable results. A's face is too far outside FFHQ's training distribution
+for meaningful inversion.
+**Decision:** Deprioritise FFHQ projection. Fine-tuning StyleGAN2-ADA on A's
+dataset remains the correct long-term path but is not this week's priority.
+
+### Pivoting to three parallel approaches for visual prototype
+**Decision:** Explore in parallel:
+- B: Pixel-space interpolation between prepared images (quick win, recognisably her face)
+- C: Diffusion-based stylisation with identity preservation (InstantID / IP-Adapter)
+- D: Face reenactment tools (Runway, Hedra, Kling) — try online tools first
+**Goal:** Something A can react to visually by Sunday April 5th.
+
+### Output must remain recognisably A's face
+**Decision:** Confirmed with Jason — output should be distinctly her face,
+abstracted to varying degrees, not generic synthetic faces.
+This rules out pure FFHQ generation as a primary output.
