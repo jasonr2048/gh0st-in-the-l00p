@@ -1,5 +1,6 @@
 .DS_Store
 .idea/
+.claude/
 .venv/
 *.ipynb_checkpoints
 .ipynb_checkpoints/
@@ -8,3 +9,4 @@ uv.lock
 # Data
 spikes/display_validation/assets/
 data/
+~data/dataset_tags.md
