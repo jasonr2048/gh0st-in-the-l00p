@@ -1,12 +1,13 @@
 """
-prepare_dataset_v3.py
+prepare_dataset_v2.py
 
 Like v1, but with two-tier mouth detection for better crop centring:
 
   1. YOLOv8 face model (yolov8n-face.pt, derronqi — 5 face keypoints):
        left_eye(0)  right_eye(1)  nose(2)  left_mouth(3)  right_mouth(4)
      Mouth corners used directly when detected.
-     Model is downloaded automatically on first run.
+     Weights fetched from Google Drive via gdown on first run and cached
+     at FACE_MODEL_CACHE_PATH (default: Drive models folder in Colab).
 
   2. Fallback — COCO pose model (yolov8n-pose.pt) + geometric estimation:
      Used per-image whenever the face model fails to detect.
@@ -18,26 +19,28 @@ Like v1, but with two-tier mouth detection for better crop centring:
      the vertical component shrinks.
 
 Usage:
-    python tools/prepare_dataset_v3.py \
+    python tools/prepare_dataset_v2.py \
         --input_dir  /path/to/dataset/raw/ready \
-        --output_dir /path/to/dataset/prepared_v3 \
+        --output_dir /path/to/dataset/prepared_v2 \
         --resolution 512 \
         --scale 2.5 \
         --mouth_scale 0.8 \
         --overwrite
 
     # Skip face model entirely (pose + geometry only):
-    python tools/prepare_dataset_v3.py ... --no_face_model
+    python tools/prepare_dataset_v2.py ... --no_face_model
+
+    # Override model cache path:
+    python tools/prepare_dataset_v2.py ... --face_model_path /path/to/yolov8n-face.pt
 
 Requirements:
-    pip install ultralytics Pillow numpy
+    pip install ultralytics Pillow numpy gdown
 """
 
 import argparse
 import math
 import shutil
 import sys
-import urllib.request
 from pathlib import Path
 
 import numpy as np
@@ -64,23 +67,29 @@ POSE_RIGHT_EYE = 2
 POSE_LEFT_EAR  = 3
 POSE_RIGHT_EAR = 4
 
-FACE_MODEL_URL  = (
-    "https://github.com/derronqi/yolov8-face/releases/download/v1.0/yolov8n-face.pt"
+# derronqi yolov8n-face weights (5 keypoints: eyes, nose, mouth corners)
+# Distributed via Google Drive; fetched with gdown on first run.
+FACE_MODEL_GDRIVE_ID = "1qcr9DbgsX3ryrz2uU8w4Xm3cOrRywXqb"
+FACE_MODEL_NAME      = "yolov8n-face.pt"
+
+# Default cache location: Drive models folder when running in Colab.
+# Override via --face_model_path at the command line.
+FACE_MODEL_DEFAULT_PATH = (
+    "/content/drive/MyDrive/Gh0st in the Loop/models/yolov8n-face.pt"
 )
-FACE_MODEL_NAME = "yolov8n-face.pt"
 
 
 # ── Model loading ─────────────────────────────────────────────────────────────
 
-def load_face_model() -> YOLO | None:
-    """Download yolov8n-face.pt if needed, load it, validate 5-keypoint output.
+def load_face_model(model_path: Path) -> YOLO | None:
+    """Download yolov8n-face.pt via gdown if needed, load it, validate 5-keypoint output.
     Returns the model or None if anything fails."""
-    model_path = Path(FACE_MODEL_NAME)
     if not model_path.exists():
-        print(f"Downloading face model from {FACE_MODEL_URL} ...")
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        print(f"Downloading face model (Google Drive id={FACE_MODEL_GDRIVE_ID}) ...")
         try:
-            urllib.request.urlretrieve(FACE_MODEL_URL, model_path)
-            print("Download complete.")
+            import gdown
+            gdown.download(id=FACE_MODEL_GDRIVE_ID, output=str(model_path), quiet=False)
         except Exception as e:
             print(f"  Face model download failed: {e}")
             return None
@@ -305,20 +314,22 @@ def process_image(path, input_dir, output_dir, rejected_dir,
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Prepare head/face dataset (v3: face model + pose fallback)."
+        description="Prepare head/face dataset (v2: face model + pose fallback)."
     )
-    parser.add_argument("--input_dir",     required=True)
-    parser.add_argument("--output_dir",    required=True)
-    parser.add_argument("--rejected_dir",  default=None)
-    parser.add_argument("--resolution",    type=int,   default=512)
-    parser.add_argument("--scale",         type=float, default=2.5)
-    parser.add_argument("--mouth_scale",   type=float, default=0.8,
+    parser.add_argument("--input_dir",       required=True)
+    parser.add_argument("--output_dir",      required=True)
+    parser.add_argument("--rejected_dir",    default=None)
+    parser.add_argument("--resolution",      type=int,   default=512)
+    parser.add_argument("--scale",           type=float, default=2.5)
+    parser.add_argument("--mouth_scale",     type=float, default=0.8,
                         help="Mouth offset for pose fallback, as multiple of "
                              "nose-to-eye/ear-centroid distance (default: 0.8)")
-    parser.add_argument("--no_face_model", action="store_true",
+    parser.add_argument("--face_model_path", default=FACE_MODEL_DEFAULT_PATH,
+                        help="Path to yolov8n-face.pt; downloaded via gdown if absent")
+    parser.add_argument("--no_face_model",   action="store_true",
                         help="Skip face model entirely; use pose + geometry only")
-    parser.add_argument("--overwrite",     action="store_true")
-    parser.add_argument("--sample",        type=int, default=None)
+    parser.add_argument("--overwrite",       action="store_true")
+    parser.add_argument("--sample",          type=int, default=None)
     args = parser.parse_args()
 
     input_dir    = Path(args.input_dir)
@@ -343,7 +354,7 @@ def main():
         import random
         images = random.sample(images, min(args.sample, len(images)))
 
-    face_model = None if args.no_face_model else load_face_model()
+    face_model = None if args.no_face_model else load_face_model(Path(args.face_model_path))
     if face_model is None and not args.no_face_model:
         print("  → Falling back to pose model + geometry for all images.\n")
 
