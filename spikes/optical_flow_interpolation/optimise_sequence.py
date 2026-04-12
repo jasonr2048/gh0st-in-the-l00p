@@ -119,7 +119,8 @@ def dist(a: tuple, b: tuple) -> float:
 
 
 def greedy_order(paths: list[str], fvecs: dict) -> list[str]:
-    """Nearest-neighbour ordering, starting from image closest to set centroid."""
+    """Nearest-neighbour ordering, starting from image closest to set centroid.
+    Used as the initial solution for two_opt."""
     if len(paths) <= 1:
         return list(paths)
 
@@ -152,6 +153,44 @@ def greedy_order(paths: list[str], fvecs: dict) -> list[str]:
         remaining.remove(nearest)
 
     return ordered
+
+
+def two_opt(paths: list[str], fvecs: dict) -> list[str]:
+    """Improve a path ordering using 2-opt.
+
+    Repeatedly tries reversing every sub-segment of the sequence; keeps the
+    reversal whenever it reduces total path length. Converges to a local
+    optimum where no single reversal helps further.
+
+    Seeds from greedy_order. O(N²) per pass; fast for the small N typical
+    of each style set.
+    """
+    seq = greedy_order(paths, fvecs)
+    n = len(seq)
+    if n <= 2:
+        return seq
+
+    def edge(p, q) -> float:
+        fp, fq = fvecs.get(p), fvecs.get(q)
+        return dist(fp, fq) if fp is not None and fq is not None else 0.0
+
+    improved = True
+    while improved:
+        improved = False
+        for i in range(n - 1):
+            for j in range(i + 2, n):
+                # Edges removed: (i → i+1)  and, if not at end, (j → j+1)
+                # Edges added:   (i → j)    and, if not at end, (i+1 → j+1)
+                old = edge(seq[i], seq[i + 1])
+                new = edge(seq[i], seq[j])
+                if j + 1 < n:
+                    old += edge(seq[j], seq[j + 1])
+                    new += edge(seq[i + 1], seq[j + 1])
+                if new < old - 1e-10:
+                    seq[i + 1:j + 1] = seq[i + 1:j + 1][::-1]
+                    improved = True
+
+    return seq
 
 
 def sequence_distance(sequence: list[str], fvecs: dict) -> float:
@@ -246,7 +285,7 @@ def main():
     original_dist     = sequence_distance(original_sequence, fvecs)
 
     ordered_sets = {
-        name: greedy_order([str(p) for p in set_images[name]], fvecs)
+        name: two_opt([str(p) for p in set_images[name]], fvecs)
         for name in set_names
     }
 
