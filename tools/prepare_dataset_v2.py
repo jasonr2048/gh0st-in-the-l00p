@@ -136,9 +136,10 @@ def _parse_kpts(results, scale_x, scale_y, min_idx):
     return get
 
 
-def get_keypoints_face_model(tmp_path, face_model, scale_x, scale_y):
-    """Run face model; return flat list of detected keypoints or None.
-    Includes mouth corners when detected — that's the whole point."""
+def _get_mouth_from_face_model(tmp_path, face_model, scale_x, scale_y):
+    """Run face model; return mouth midpoint (x, y) or None.
+    Derronqi keypoint order: left_eye(0) right_eye(1) nose(2)
+                             left_mouth(3) right_mouth(4)."""
     results = face_model(str(tmp_path), verbose=False)
     if results[0].keypoints is None or len(results[0].keypoints.xy) == 0:
         return None
@@ -152,17 +153,23 @@ def get_keypoints_face_model(tmp_path, face_model, scale_x, scale_y):
                 return (int(x * scale_x), int(y * scale_y))
         return None
 
-    points = [get(i) for i in range(5)]
-    detected = [p for p in points if p is not None]
-    return detected if detected else None
+    lm, rm = get(FACE_LEFT_MOUTH), get(FACE_RIGHT_MOUTH)
+    if lm and rm:
+        return ((lm[0] + rm[0]) // 2, (lm[1] + rm[1]) // 2)
+    return lm or rm   # accept single corner if only one visible
 
 
-def get_keypoints_pose_model(tmp_path, pose_model, scale_x, scale_y,
-                              mouth_scale: float):
-    """Run pose model; return flat list including estimated mouth point."""
+def get_head_keypoints(tmp_path, face_model, pose_model,
+                       scale_x, scale_y, mouth_scale):
+    """Return (keypoints, source) for crop calculation.
+
+    Ears are always sourced from the pose model — they anchor the head span.
+    Mouth is sourced from the face model when available, otherwise estimated
+    geometrically from pose keypoints.
+    """
     results = pose_model(str(tmp_path), verbose=False)
     if results[0].keypoints is None or len(results[0].keypoints.xy) == 0:
-        return None
+        return None, "pose"
 
     kpts = results[0].keypoints.xy[0].tolist()
 
@@ -182,34 +189,29 @@ def get_keypoints_pose_model(tmp_path, pose_model, scale_x, scale_y,
     head_kpts = [p for p in [nose, left_eye, right_eye, left_ear, right_ear]
                  if p is not None]
     if not head_kpts:
-        return None
+        return None, "pose"
 
-    # Estimate mouth: nose + euclidean(nose, eye/ear centroid) × mouth_scale
-    if mouth_scale > 0 and nose is not None:
+    # Mouth: prefer face model; fall back to geometric estimate from pose.
+    mouth = None
+    source = "pose"
+    if face_model is not None:
+        mouth = _get_mouth_from_face_model(tmp_path, face_model, scale_x, scale_y)
+        if mouth:
+            source = "face"
+
+    if mouth is None and mouth_scale > 0 and nose is not None:
         upper = [p for p in [left_eye, right_eye, left_ear, right_ear]
                  if p is not None]
         if upper:
             cx = sum(p[0] for p in upper) / len(upper)
             cy = sum(p[1] for p in upper) / len(upper)
             r  = math.hypot(nose[0] - cx, nose[1] - cy)
-            head_kpts.append((nose[0], int(nose[1] + r * mouth_scale)))
+            mouth = (nose[0], int(nose[1] + r * mouth_scale))
 
-    return head_kpts
+    if mouth:
+        head_kpts.append(mouth)
 
-
-def get_head_keypoints(tmp_path, face_model, pose_model,
-                       scale_x, scale_y, mouth_scale):
-    """Try face model first; fall back to pose + geometry per image."""
-    source = "face"
-    if face_model is not None:
-        kpts = get_keypoints_face_model(tmp_path, face_model, scale_x, scale_y)
-        if kpts:
-            return kpts, source
-
-    source = "pose"
-    kpts = get_keypoints_pose_model(tmp_path, pose_model, scale_x, scale_y,
-                                    mouth_scale)
-    return kpts, source
+    return head_kpts, source
 
 
 # ── Crop helpers (unchanged from v1) ─────────────────────────────────────────
