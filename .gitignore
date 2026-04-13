@@ -2,6 +2,11 @@
 .idea/
 .claude/
 .venv/
+
+__pycache__/
+*.pyc
+*.pyo
+
 *.ipynb_checkpoints
 .ipynb_checkpoints/
 uv.lock
