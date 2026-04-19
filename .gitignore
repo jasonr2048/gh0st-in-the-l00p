@@ -2,11 +2,17 @@
 .idea/
 .claude/
 .venv/
+
+__pycache__/
+*.pyc
+*.pyo
+
 *.ipynb_checkpoints
 .ipynb_checkpoints/
 uv.lock
 
 # Data
 spikes/display_validation/assets/
-data/
-~data/dataset_tags.md
+data/*
+!data/dataset_tags.md
+!data/dataset_tags_exhibition.md

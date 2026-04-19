@@ -98,3 +98,12 @@ See `docs/decisions_log.md` for full log. Summary:
 - `--overwrite` flag for reprocessing; default skips existing files
 - Keep spikes self-contained — code and doc together in spike subfolder
 - Notebooks: clear outputs before committing
+
+## Cowork operating principle
+**Cowork sessions must run experiments autonomously.** Jason's time is the
+bottleneck. Default to scripted/headless/CLI workflows over browser UIs. When
+remote infra (RunPod, Colab, etc.) is in play, set up SSH or API access
+upfront so the agent can drive the whole experiment end-to-end. Ask Jason
+only for things that require his account credentials or physical action
+(payment, OAuth, pasting a public key, accepting ToS). Report back with
+results, not step-by-step checkpoints that need his input.
