@@ -26,6 +26,7 @@ class Gh0stExhibitionRuntime:
             self.rng,
             duration_s=config.exhibition.proof_duration_seconds,
             hold_seconds=config.exhibition.image_hold_seconds,
+            soft_landing_seconds=config.exhibition.loop_soft_landing_seconds,
         )
         self.payload = load_text_payload(config.exhibition.text_payload)
 
@@ -33,6 +34,10 @@ class Gh0stExhibitionRuntime:
         self.rng = Random(self.config.random_seed)
         screen_a_typewriter, screen_b_typewriter = self._build_typewriters()
         renderer = self._build_renderer(open_windows=True)
+        print(
+            f"[exhibition] starting playback duration={self.timeline.duration_s:.1f}s fps={self.config.exhibition.target_fps}",
+            flush=True,
+        )
         start_s = monotonic()
         next_frame_at = start_s
         frame_period_s = max(0.001, 1.0 / max(1, self.config.exhibition.target_fps))
@@ -53,8 +58,9 @@ class Gh0stExhibitionRuntime:
                     sleep(min(0.002, next_frame_at - now_s))
                     continue
 
-                elapsed_s = now_s - start_s
-                previous_cue, cue = self.timeline.frame_at(min(elapsed_s, self.timeline.duration_s))
+                elapsed_s = min(now_s - start_s, self.timeline.duration_s)
+                previous_cue, cue = self.timeline.frame_at(elapsed_s)
+                next_cue_time = self.timeline.next_time_after(elapsed_s)
                 current_a, current_b, last_cue_time = self._reset_for_cue_if_needed(
                     cue.time_s,
                     cue.screen_b_path,
@@ -74,6 +80,8 @@ class Gh0stExhibitionRuntime:
                         cue.state_name,
                         cue.screen_b_category,
                         cue.screen_a_category,
+                        min(next_cue_time, self.timeline.duration_s) - elapsed_s,
+                        self.timeline.duration_s - elapsed_s,
                         screen_a_typewriter,
                         screen_b_typewriter,
                         allow_text=allow_text,
@@ -122,10 +130,19 @@ class Gh0stExhibitionRuntime:
         renderer = self._build_renderer(open_windows=False)
         output_dir = self.config.exhibition.export_output_dir
         output_dir.mkdir(parents=True, exist_ok=True)
-        screen_a_path = output_dir / "screen_A.mp4"
-        screen_b_path = output_dir / "screen_B.mp4"
+        screen_a_path = output_dir / "screen_A.avi"
+        screen_b_path = output_dir / "screen_B.avi"
         fps = float(self.config.exhibition.export_fps or self.config.exhibition.target_fps)
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        total_frames = max(1, int(round(self.timeline.duration_s * fps))) + 1
+        codec_name = "MJPG"
+        print(
+            f"[exhibition] starting export duration={self.timeline.duration_s:.1f}s fps={fps:.1f} frames={total_frames}",
+            flush=True,
+        )
+        print(f"[exhibition] codec/container={codec_name}/AVI", flush=True)
+        print(f"[exhibition] saving {screen_a_path}", flush=True)
+        print(f"[exhibition] saving {screen_b_path}", flush=True)
+        fourcc = cv2.VideoWriter_fourcc(*codec_name)
         writer_a = cv2.VideoWriter(
             str(screen_a_path),
             fourcc,
@@ -141,17 +158,17 @@ class Gh0stExhibitionRuntime:
         if not writer_a.isOpened() or not writer_b.isOpened():
             writer_a.release()
             writer_b.release()
+            print("[exhibition] export error: failed to open video writers", flush=True)
             raise RuntimeError("Failed to open exhibition export video writers")
 
         current_a = ("", "normal", "")
         current_b = ("", "normal", "")
         last_cue_time = -1.0
-        total_frames = max(1, int(round(self.timeline.duration_s * fps))) + 1
-
         try:
             for frame_index in range(total_frames):
                 elapsed_s = min(self.timeline.duration_s, frame_index / fps)
                 previous_cue, cue = self.timeline.frame_at(elapsed_s)
+                next_cue_time = self.timeline.next_time_after(elapsed_s)
                 current_a, current_b, last_cue_time = self._reset_for_cue_if_needed(
                     cue.time_s,
                     cue.screen_b_path,
@@ -169,6 +186,8 @@ class Gh0stExhibitionRuntime:
                     cue.state_name,
                     cue.screen_b_category,
                     cue.screen_a_category,
+                    min(next_cue_time, self.timeline.duration_s) - elapsed_s,
+                    self.timeline.duration_s - elapsed_s,
                     screen_a_typewriter,
                     screen_b_typewriter,
                     allow_text=allow_text,
@@ -191,7 +210,8 @@ class Gh0stExhibitionRuntime:
             writer_a.release()
             writer_b.release()
             renderer.close()
-
+        self._validate_export(screen_a_path, screen_b_path)
+        print("[exhibition] export complete", flush=True)
         return screen_a_path, screen_b_path
 
     def _build_typewriters(self) -> tuple[ExhibitionTypewriter, ExhibitionTypewriter]:
@@ -243,11 +263,15 @@ class Gh0stExhibitionRuntime:
         state_name: str,
         screen_a_face_category: str,
         screen_b_face_category: str,
+        remaining_face_time_s: float,
+        remaining_total_time_s: float,
         screen_a_typewriter: ExhibitionTypewriter,
         screen_b_typewriter: ExhibitionTypewriter,
         *,
         allow_text: bool,
     ) -> tuple[tuple[str, str, str], tuple[str, str, str]]:
+        remaining_budget_s = max(0.0, min(remaining_face_time_s, remaining_total_time_s))
+        soft_landing = remaining_total_time_s <= self.config.exhibition.loop_soft_landing_seconds
         screen_b_current = screen_b_typewriter.current_full_text()
         current_a = screen_a_typewriter.update(
             elapsed_s,
@@ -257,6 +281,9 @@ class Gh0stExhibitionRuntime:
             self.rng,
             forbidden_texts=((screen_b_current,) if screen_b_current else ()),
             allow_progress=allow_text,
+            allow_new_lines=allow_text and remaining_budget_s > 0.5,
+            allow_log_dumps=not soft_landing,
+            remaining_time_s=remaining_budget_s,
         )
         screen_a_current = screen_a_typewriter.current_full_text()
         current_b = screen_b_typewriter.update(
@@ -267,6 +294,9 @@ class Gh0stExhibitionRuntime:
             self.rng,
             forbidden_texts=((screen_a_current,) if screen_a_current else ()),
             allow_progress=allow_text,
+            allow_new_lines=allow_text and remaining_budget_s > 0.5,
+            allow_log_dumps=not soft_landing,
+            remaining_time_s=remaining_budget_s,
         )
         return current_a, current_b
 
@@ -330,3 +360,22 @@ class Gh0stExhibitionRuntime:
         screen_a_typewriter.reset_for_new_face(str(screen_a_face_token))
         screen_b_typewriter.reset_for_new_face(str(screen_b_face_token))
         return ("", "normal", ""), ("", "normal", ""), cue_time
+
+    @staticmethod
+    def _validate_export(screen_a_path: Path, screen_b_path: Path) -> None:
+        missing = []
+        for path in (screen_a_path, screen_b_path):
+            if not path.exists():
+                missing.append(path)
+                continue
+            if path.stat().st_size < 1024:
+                missing.append(path)
+                continue
+            capture = cv2.VideoCapture(str(path))
+            ok, _ = capture.read()
+            capture.release()
+            if not ok:
+                missing.append(path)
+        if missing:
+            joined = ", ".join(str(path) for path in missing)
+            raise RuntimeError(f"Exhibition export failed to write video files: {joined}")

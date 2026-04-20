@@ -29,6 +29,13 @@ class ExhibitionRenderer:
     PANEL_BORDER_COLOR = (30, 140, 46)
     PANEL_DIVIDER_COLOR = (18, 80, 28)
     SCANLINE_COLOR = (8, 22, 8)
+    VIGNETTE_STRENGTH = 0.18
+    VIGNETTE_POWER = 1.6
+    SCAN_BAND_RADIUS = 14
+    SCAN_BAND_GREEN_BOOST = 26
+    SCAN_BAND_DIM = 8
+    SCAN_LINE_ALPHA = 0.55
+    FACE_CROP_ASPECT = 0.78
 
     def __init__(
         self,
@@ -49,7 +56,7 @@ class ExhibitionRenderer:
         self.clean_presentation = clean_presentation
         self.open_windows = open_windows
         self.normal_font = self._load_font(28)
-        self.log_dump_font = self._load_font(34)
+        self.log_dump_font = self._load_font(28)
         self.header_font = self._load_font(18)
         self._fitted_image_cache: OrderedDict[tuple[str, int, int], np.ndarray] = OrderedDict()
         self._text_sprite_cache: OrderedDict[tuple[str, int, tuple[int, int, int], tuple[int, int, int]], np.ndarray] = OrderedDict()
@@ -63,9 +70,11 @@ class ExhibitionRenderer:
     def _init_window(self, config: ScreenConfig) -> None:
         cv2.namedWindow(config.window_name, cv2.WINDOW_NORMAL)
         if self.fullscreen:
+            cv2.moveWindow(config.window_name, config.window_x, config.window_y)
             cv2.setWindowProperty(config.window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         else:
             cv2.resizeWindow(config.window_name, config.window_width, config.window_height)
+            cv2.moveWindow(config.window_name, config.window_x, config.window_y)
 
     def render(
         self,
@@ -113,6 +122,7 @@ class ExhibitionRenderer:
         canvas = self._build_transition_canvas(frame_state, config)
         canvas = self._harden_frame(canvas, frame_state.corruption_score)
         canvas = self._tint_canvas(canvas, frame_state.corruption_score, frame_state.line_kind)
+        canvas = self._apply_vignette(canvas)
         self._draw_active_scan(canvas, frame_state.scan_progress)
         self._draw_overlay_panel(canvas, frame_state)
         if not self.clean_presentation:
@@ -136,7 +146,7 @@ class ExhibitionRenderer:
 
     def _draw_overlay_panel(self, canvas: np.ndarray, frame_state: ExhibitionFrameState) -> None:
         h, w = canvas.shape[:2]
-        geometry = self._panel_geometry(h, w, frame_state.line_kind)
+        geometry = self._panel_geometry(h, w)
         margin = int(geometry["margin"])
         panel_w = int(geometry["panel_w"])
         panel_y = int(geometry["panel_y"])
@@ -178,7 +188,8 @@ class ExhibitionRenderer:
             glow_color=(14, 55, 20),
         )
 
-        lines = self._wrap(frame_state.revealed_text, 28 if frame_state.line_kind == "log_dump" else 42)
+        lines = self._layout_lines(frame_state.revealed_text, 28 if frame_state.line_kind == "log_dump" else 42)
+        lines = self._dedupe_lines(lines)
         if frame_state.line_kind == "log_dump":
             text_color = self.LOG_DUMP_TEXT_COLOR
             glow_color = self.LOG_DUMP_GLOW_COLOR
@@ -188,7 +199,7 @@ class ExhibitionRenderer:
             glow_color = self.NORMAL_GLOW_COLOR
             font_key = "normal"
 
-        visible_lines = lines[:3] if frame_state.line_kind == "log_dump" else lines[:5]
+        visible_lines = lines[:3] if frame_state.line_kind == "log_dump" else lines[-5:]
         for index, line in enumerate(visible_lines):
             position = (margin + 28, base_y + (index * line_step) + (10 if frame_state.line_kind == "log_dump" else 0))
             self._draw_terminal_text(
@@ -210,22 +221,29 @@ class ExhibitionRenderer:
             )
         cv2.rectangle(canvas, (0, 0), (canvas.shape[1] - 1, canvas.shape[0] - 1), color, 2)
 
-    def _wrap(self, text: str, max_chars: int) -> list[str]:
+    def _layout_lines(self, text: str, max_chars: int) -> list[str]:
         lines: list[str] = []
         for block in text.splitlines() or [""]:
-            words = block.split()
-            if not words:
+            stripped = block.strip()
+            if not stripped:
                 continue
-            current = words[0]
-            for word in words[1:]:
-                candidate = f"{current} {word}"
-                if len(candidate) <= max_chars:
-                    current = candidate
-                else:
-                    lines.append(current)
-                    current = word
-            lines.append(current)
+            lines.extend(self._wrap_stable_line(stripped, max_chars))
         return lines
+
+    @staticmethod
+    def _wrap_stable_line(text: str, max_chars: int) -> list[str]:
+        wrapped: list[str] = []
+        remaining = text.strip()
+        while remaining:
+            if len(remaining) <= max_chars:
+                wrapped.append(remaining)
+                break
+            split_at = remaining.rfind(" ", 0, max_chars + 1)
+            if split_at <= 0 or split_at < int(max_chars * 0.55):
+                split_at = max_chars
+            wrapped.append(remaining[:split_at].rstrip())
+            remaining = remaining[split_at:].lstrip()
+        return wrapped
 
     def _build_transition_canvas(self, frame_state: ExhibitionFrameState, config: ScreenConfig) -> np.ndarray:
         current = self._get_fitted_image(frame_state.image_path, config)
@@ -327,29 +345,49 @@ class ExhibitionRenderer:
         if self.lightweight_render:
             cv2.line(canvas, (0, scan_y), (w, scan_y), (96, 255, 128), 1)
             return
-        band_y0 = max(0, scan_y - 8)
-        band_y1 = min(h, scan_y + 8)
+        band_y0 = max(0, scan_y - self.SCAN_BAND_RADIUS)
+        band_y1 = min(h, scan_y + self.SCAN_BAND_RADIUS)
         if band_y1 > band_y0:
-            local = canvas[band_y0:band_y1, :, :].astype(np.int16)
-            local[:, :, 1] += 18
-            local[:, :, 0] -= 6
-            local[:, :, 2] -= 6
-            canvas[band_y0:band_y1, :, :] = np.clip(local, 0, 255).astype(np.uint8)
-            green_band = canvas[band_y0:band_y1, :, 1].astype(np.int16)
-            green_band += 12
-            canvas[band_y0:band_y1, :, 1] = np.clip(green_band, 0, 255).astype(np.uint8)
-        cv2.line(canvas, (0, scan_y), (w, scan_y), (96, 255, 128), 1)
-        cv2.line(canvas, (0, max(0, scan_y - 1)), (w, max(0, scan_y - 1)), (34, 120, 48), 1)
-        cv2.line(canvas, (0, min(h - 1, scan_y + 1)), (w, min(h - 1, scan_y + 1)), (34, 120, 48), 1)
+            band = canvas[band_y0:band_y1, :, :].astype(np.int16)
+            rows = np.arange(band_y0, band_y1, dtype=np.float32)
+            weights = 1.0 - (np.abs(rows - scan_y) / max(1.0, float(self.SCAN_BAND_RADIUS)))
+            weights = np.clip(weights, 0.0, 1.0)[:, None, None]
+            band[:, :, 1] = np.clip(
+                band[:, :, 1] + (self.SCAN_BAND_GREEN_BOOST * weights[:, :, 0]),
+                0,
+                255,
+            )
+            dim = (self.SCAN_BAND_DIM * weights[:, :, 0]).astype(np.int16)
+            band[:, :, 0] = np.clip(band[:, :, 0] - dim, 0, 255)
+            band[:, :, 2] = np.clip(band[:, :, 2] - dim, 0, 255)
+            canvas[band_y0:band_y1, :, :] = band.astype(np.uint8)
+        line_color = (96, 255, 128)
+        overlay = canvas.copy()
+        cv2.line(overlay, (0, scan_y), (w, scan_y), line_color, 1)
+        cv2.addWeighted(overlay, self.SCAN_LINE_ALPHA, canvas, 1.0 - self.SCAN_LINE_ALPHA, 0.0, canvas)
 
-    def _panel_geometry(self, h: int, w: int, line_kind: str) -> dict[str, object]:
-        key = (h, w, line_kind)
+    def _apply_vignette(self, canvas: np.ndarray) -> np.ndarray:
+        h, w = canvas.shape[:2]
+        if h == 0 or w == 0:
+            return canvas
+        yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+        nx = (xx - (w / 2.0)) / (w / 2.0)
+        ny = (yy - (h / 2.0)) / (h / 2.0)
+        radius = np.sqrt((nx * nx) + (ny * ny))
+        mask = np.clip(radius, 0.0, 1.0) ** self.VIGNETTE_POWER
+        mask = (self.VIGNETTE_STRENGTH * mask).astype(np.float32)
+        shaded = canvas.astype(np.float32)
+        shaded *= (1.0 - mask[:, :, None])
+        return shaded.astype(np.uint8)
+
+    def _panel_geometry(self, h: int, w: int) -> dict[str, object]:
+        key = (h, w)
         if key in self._panel_geometry_cache:
             return self._panel_geometry_cache[key]
 
         margin = self.overlay_margin_px
         panel_w = w - (margin * 2)
-        panel_h = int(h * (0.29 if line_kind == "log_dump" else 0.245))
+        panel_h = int(h * 0.245)
         panel_y = h - margin - panel_h
         geometry = {
             "margin": margin,
@@ -359,10 +397,21 @@ class ExhibitionRenderer:
             "top_left": (margin, panel_y),
             "bottom_right": (margin + panel_w, panel_y + panel_h),
             "base_y": panel_y + 54,
-            "line_step": 60 if line_kind == "log_dump" else 34,
+            "line_step": 34,
         }
         self._panel_geometry_cache[key] = geometry
         return geometry
+
+    @staticmethod
+    def _dedupe_lines(lines: list[str]) -> list[str]:
+        if not lines:
+            return lines
+        deduped = [lines[0]]
+        for line in lines[1:]:
+            if line.strip() == deduped[-1].strip():
+                continue
+            deduped.append(line)
+        return deduped
 
     def _font(self, font_key: str) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         if font_key == "header":
@@ -433,11 +482,28 @@ class ExhibitionRenderer:
             self._fitted_image_cache.move_to_end(key)
             return cached
         image = _read_image(image_path)
-        fitted = fit_to_window(image, config.canvas_width, config.canvas_height)
+        cropped = self._center_crop(image, self.FACE_CROP_ASPECT)
+        fitted = fit_to_window(cropped, config.canvas_width, config.canvas_height)
         self._fitted_image_cache[key] = fitted
         if len(self._fitted_image_cache) > 48:
             self._fitted_image_cache.popitem(last=False)
         return fitted
+
+    @staticmethod
+    def _center_crop(image: np.ndarray, target_aspect: float) -> np.ndarray:
+        h, w = image.shape[:2]
+        if h == 0 or w == 0:
+            return image
+        current_aspect = w / h
+        if current_aspect > target_aspect:
+            new_w = int(h * target_aspect)
+            x0 = max(0, (w - new_w) // 2)
+            return image[:, x0:x0 + new_w]
+        if current_aspect < target_aspect:
+            new_h = int(w / target_aspect)
+            y0 = max(0, (h - new_h) // 2)
+            return image[y0:y0 + new_h, :]
+        return image
 
     def _build_header(self, frame_state: ExhibitionFrameState) -> str:
         corruption = int(frame_state.corruption_score * 100)

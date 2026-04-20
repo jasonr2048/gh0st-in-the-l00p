@@ -39,6 +39,7 @@ class DualScreenRenderer:
     def _init_window(self, config: ScreenConfig) -> None:
         cv2.namedWindow(config.window_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(config.window_name, config.window_width, config.window_height)
+        cv2.moveWindow(config.window_name, config.window_x, config.window_y)
 
     def render(
         self,
