@@ -27,6 +27,8 @@ class CorruptionTextStateMachine:
         self._recent_by_pool: dict[str, list[str]] = {name: [] for name in payload}
         self._recent_global: list[str] = []
         self._recent_signatures: list[str] = []
+        self._log_dump_count_by_role = {"node_a": 0, "node_b": 0}
+        self._choices_since_log_dump_by_role = {"node_a": 999, "node_b": 999}
 
     def describe(self, state_name: str) -> WeightedTextState:
         return WeightedTextState(primary_state=state_name, weights={state_name: 1.0})
@@ -88,7 +90,11 @@ class CorruptionTextStateMachine:
             elif category in {"extreme", "synthetic"} and corruption_score >= 0.82 and rng.random() < 0.18:
                 pool_names.append(f"collapse_broken_{screen_role[-1]}")
 
-        if "log_dump" in self.payload and rng.random() < self._log_dump_chance(state_name, screen_role):
+        if (
+            "log_dump" in self.payload
+            and self._log_dump_allowed(screen_role)
+            and rng.random() < self._log_dump_chance(state_name, screen_role)
+        ):
             pool_names.insert(0, "log_dump")
 
         # Preserve order but drop missing pools.
@@ -160,6 +166,15 @@ class CorruptionTextStateMachine:
         if len(self._recent_signatures) > 42:
             del self._recent_signatures[0]
 
+    def record_displayed_choice(self, screen_role: str, line_kind: str) -> None:
+        if line_kind == "log_dump":
+            self._log_dump_count_by_role[screen_role] = self._log_dump_count_by_role.get(screen_role, 0) + 1
+            self._choices_since_log_dump_by_role[screen_role] = 0
+            return
+        self._choices_since_log_dump_by_role[screen_role] = (
+            self._choices_since_log_dump_by_role.get(screen_role, 999) + 1
+        )
+
     def label_for(self, state_name: str) -> str:
         return STATE_LABELS.get(state_name, state_name)
 
@@ -176,8 +191,15 @@ class CorruptionTextStateMachine:
         if screen_role == "node_a":
             return base * 1.15
         if screen_role == "node_b":
-            return base * 0.78
+            return base * 0.92
         return base
+
+    def _log_dump_allowed(self, screen_role: str) -> bool:
+        if screen_role != "node_b":
+            return True
+        if self._log_dump_count_by_role.get(screen_role, 0) >= 4:
+            return False
+        return self._choices_since_log_dump_by_role.get(screen_role, 999) >= 8
 
     @staticmethod
     def _base_line_weight(line: PayloadLine) -> float:

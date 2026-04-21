@@ -104,6 +104,10 @@ def build_proof_timeline(
                     corruption_score=phase_progress,
                     avoid_paths=tuple({*recent_a[-4:], cues[-1].screen_a_path if cues else None} - {None}),
                     avoid_identities=tuple({*recent_id_a[-14:]}),
+                    recent_window=24,
+                    identity_window=22,
+                    identity_penalty=8.5,
+                    path_penalty=12.0,
                 ),
                 screen_a_category=category_a,
                 screen_b_category=category_b,
@@ -210,13 +214,15 @@ def _select_curated_image(
     corruption_score: float,
     avoid_paths: tuple[Path | None, ...] = (),
     avoid_identities: tuple[str, ...] = (),
+    recent_window: int = 16,
+    identity_window: int = 14,
+    identity_penalty: float = 5.6,
+    path_penalty: float = 8.0,
 ) -> Path:
     paths = curated_pool.get(category, [])
     if not paths:
         paths = [path for values in curated_pool.values() for path in values]
 
-    recent_window = 16
-    identity_window = 14
     recent_block = set(recent_paths[-recent_window:])
     avoid_block = {path for path in avoid_paths if path is not None}
     identity_block = set(recent_identities[-identity_window:]) | set(avoid_identities)
@@ -249,8 +255,8 @@ def _select_curated_image(
             score -= 18.0
         if identity in identity_block:
             score -= 24.0
-        score -= identity_usage.get(identity, 0) * 5.6
-        score -= path_usage.get(path, 0) * 8.0
+        score -= identity_usage.get(identity, 0) * identity_penalty
+        score -= path_usage.get(path, 0) * path_penalty
         if category == "stable":
             if corruption_score < 0.18:
                 score -= 1.8
