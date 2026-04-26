@@ -72,10 +72,9 @@ showing A's face morphing through multiple makeup styles, portrait format (1080x
   - Scaling/portrait fix applied (512x512 → centred on 1080x1920 canvas)
   - Known issue: face position/orientation varies between images → jarring transitions
   - Next: keypoint-based image ordering to minimise face position jumps between frames
-- `tools/optimise_sequence.py` — TO BE WRITTEN
-  - Use YOLOv8 pose keypoints (nose + eyes) to order images within and across sets
-  - Minimise total keypoint distance across the sequence
-  - Output: `data/sequence.json` consumed by interpolation notebook
+- `spikes/optical_flow_interpolation/optimise_sequence.py` — orders images within
+  and across sets using YOLOv8 pose keypoints (nose + eyes centroid); outputs
+  `data/sequence.json` consumed by interpolation notebook
 
 ### Parallel explorations (not started)
 - Diffusion-based stylisation with identity preservation (InstantID / IP-Adapter)
