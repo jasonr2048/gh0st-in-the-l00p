@@ -32,7 +32,7 @@ class ExhibitionConfig:
     overlay_margin_px: int = 64
     image_hold_seconds: float = 8.2
     image_text_delay_s: float = 1.05
-    scan_cycle_seconds: float = 2.8
+    scan_cycle_seconds: float = 12.0
     normal_idle_s: float = 2.4
     log_dump_idle_s: float = 2.5
     log_dump_prefreeze_s: float = 0.9
