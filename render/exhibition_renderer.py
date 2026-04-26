@@ -89,6 +89,58 @@ class ExhibitionRenderer:
             self._build_screen(screen_b_state, self.screen_b),
         )
 
+    def compose_video_frames(
+        self,
+        background_a: np.ndarray,
+        background_b: np.ndarray,
+        state_a: object,
+        state_b: object,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Compose overlay onto raw video background frames. Used for export."""
+        return (
+            self._build_screen_from_frame(background_a, state_a, self.screen_a),
+            self._build_screen_from_frame(background_b, state_b, self.screen_b),
+        )
+
+    def render_video(
+        self,
+        background_a: np.ndarray,
+        background_b: np.ndarray,
+        state_a: object,
+        state_b: object,
+    ) -> None:
+        """Render overlay onto raw video background frames to preview windows."""
+        frame_a = self._build_screen_from_frame(background_a, state_a, self.screen_a)
+        frame_b = self._build_screen_from_frame(background_b, state_b, self.screen_b)
+        cv2.imshow(self.screen_a.window_name, self._fit_dynamic(frame_a, self.screen_a))
+        cv2.imshow(self.screen_b.window_name, self._fit_dynamic(frame_b, self.screen_b))
+
+    def _build_screen_from_frame(
+        self,
+        background: np.ndarray,
+        state: object,
+        config: ScreenConfig,
+    ) -> np.ndarray:
+        """Build a full canvas from a raw video frame and a VideoFrameState."""
+        canvas = fit_to_window(background, config.canvas_width, config.canvas_height).copy()
+        canvas = self._harden_frame(canvas, state.corruption_score)
+        canvas = self._tint_canvas(canvas, state.corruption_score, state.line_kind)
+        self._draw_active_scan(canvas, state.scan_progress)
+        proxy = ExhibitionFrameState(
+            image_path=Path("."),
+            previous_image_path=None,
+            corruption_score=state.corruption_score,
+            revealed_text=state.revealed_text,
+            line_kind=state.line_kind,
+            state_label=state.state_label,
+            scan_progress=state.scan_progress,
+            transition_alpha=1.0,
+        )
+        self._draw_overlay_panel(canvas, proxy)
+        if not self.clean_presentation:
+            self._draw_border(canvas, state.corruption_score, state.line_kind)
+        return canvas
+
     def process_events(self, wait_ms: int) -> bool:
         if not self.open_windows:
             return True
