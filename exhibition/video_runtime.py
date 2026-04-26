@@ -214,19 +214,27 @@ class VideoExhibitionRuntime:
         screen_b_path = output_dir / "screen_B.mp4"
 
         fps = self.export_fps
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        writer_a = cv2.VideoWriter(
-            str(screen_a_path), fourcc, fps,
-            (self.config.window_a.canvas_width, self.config.window_a.canvas_height),
-        )
-        writer_b = cv2.VideoWriter(
-            str(screen_b_path), fourcc, fps,
-            (self.config.window_b.canvas_width, self.config.window_b.canvas_height),
-        )
-        if not writer_a.isOpened() or not writer_b.isOpened():
+        size_a = (self.config.window_a.canvas_width, self.config.window_a.canvas_height)
+        size_b = (self.config.window_b.canvas_width, self.config.window_b.canvas_height)
+
+        # avc1 (H.264) works on macOS; mp4v is the cross-platform fallback.
+        writer_a, writer_b = None, None
+        for codec in ("avc1", "mp4v"):
+            fourcc = cv2.VideoWriter_fourcc(*codec)
+            writer_a = cv2.VideoWriter(str(screen_a_path), fourcc, fps, size_a)
+            writer_b = cv2.VideoWriter(str(screen_b_path), fourcc, fps, size_b)
+            if writer_a.isOpened() and writer_b.isOpened():
+                print(f"Using codec: {codec}")
+                break
             writer_a.release()
             writer_b.release()
-            raise RuntimeError("Failed to open exhibition export video writers")
+            writer_a, writer_b = None, None
+
+        if writer_a is None or writer_b is None:
+            raise RuntimeError(
+                f"Failed to open video writers for {screen_a_path} / {screen_b_path}. "
+                "Tried codecs: avc1, mp4v."
+            )
 
         cap_a = _open_capture(ecfg.video_path_a)
         cap_b = _open_capture(ecfg.video_path_b)
