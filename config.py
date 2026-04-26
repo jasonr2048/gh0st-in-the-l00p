@@ -44,6 +44,9 @@ class ExhibitionConfig:
     lightweight_render: bool = False
     fullscreen: bool = False
     clean_presentation: bool = True
+    video_path_a: Path | None = None
+    video_path_b: Path | None = None
+    overwrite: bool = False
 
 
 @dataclass(slots=True)
