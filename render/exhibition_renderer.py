@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from config import ScreenConfig
 from exhibition.models import ExhibitionFrameState
-from render.dual_screen_renderer import fit_to_window
+from render.utils import fit_to_window
 
 
 def _read_image(path: Path) -> np.ndarray:

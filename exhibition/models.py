@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -32,3 +32,13 @@ class ExhibitionFrameState:
     state_label: str
     scan_progress: float = 0.0
     transition_alpha: float = 1.0
+    image_frame: object = field(default=None, hash=False, compare=False)
+
+
+@dataclass(slots=True, frozen=True)
+class VideoFrameState:
+    corruption_score: float
+    revealed_text: str
+    line_kind: str
+    state_label: str
+    scan_progress: float = 0.0
