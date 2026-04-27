@@ -64,24 +64,25 @@ dataset/
 ```
 
 ## Current Phase
-**Video generation for A to review.** Goal: optical flow interpolation video
-showing A's face morphing through multiple makeup styles, portrait format (1080x1920).
+**Working pipeline.** Full workflow is functional end-to-end:
+Colab pipeline → morph video → local overlay export → two exhibition MP4s.
 
-### Active work
-- `notebooks/optical_flow_interpolation.ipynb` — main notebook
-  - Scaling/portrait fix applied (512x512 → centred on 1080x1920 canvas)
-  - Known issue: face position/orientation varies between images → jarring transitions
-  - Next: keypoint-based image ordering to minimise face position jumps between frames
-- `tools/optimise_sequence.py` — TO BE WRITTEN
-  - Use YOLOv8 pose keypoints (nose + eyes) to order images within and across sets
-  - Minimise total keypoint distance across the sequence
-  - Output: `data/sequence.json` consumed by interpolation notebook
+### What's working
+- `notebooks/pipeline.ipynb` — full Colab pipeline:
+  bg removal (rembg, corner-check skip) → crop/resize (prepare_dataset_v2.py) →
+  sequence optimisation (2-opt, YOLOv8 keypoints) → manual review grid →
+  video generation (streaming optical flow, no OOM)
+- `app.py` — local CLI: `python app.py --video data/<id>.mp4 --export`
+  produces `exports/exhibition/<id>_<ts>/screen_A.mp4` + `screen_B.mp4`
+- Sidecar JSON written by Colab, read by local runtime for duration/experiment ID
+- `fonts/CourierPrime-Regular.ttf` bundled for cross-machine font consistency
 
-### Parallel explorations (not started)
-- Diffusion-based stylisation with identity preservation (InstantID / IP-Adapter)
-- Face reenactment tools (Runway, Hedra, Kling)
-- StyleGAN2-ADA fine-tuning on A's dataset (longer term)
-- Video post-processing: text overlay, sound, visual scan effect (separate spike)
+### Known open items
+- Visual quality of morph video still being tuned (timing, set selection, bg removal results)
+- Diffusion-based stylisation with identity preservation (InstantID / IP-Adapter) — not started
+- Face reenactment tools (Runway, Hedra, Kling) — not started
+- StyleGAN2-ADA fine-tuning on A's dataset — longer term
+- Sound — handled by A
 - Two-entity responsiveness: entity B gradually mirrors entity A's current style set
 
 ## Key Decisions
@@ -98,3 +99,12 @@ See `docs/decisions_log.md` for full log. Summary:
 - `--overwrite` flag for reprocessing; default skips existing files
 - Keep spikes self-contained — code and doc together in spike subfolder
 - Notebooks: clear outputs before committing
+
+## Cowork operating principle
+**Cowork sessions must run experiments autonomously.** Jason's time is the
+bottleneck. Default to scripted/headless/CLI workflows over browser UIs. When
+remote infra (RunPod, Colab, etc.) is in play, set up SSH or API access
+upfront so the agent can drive the whole experiment end-to-end. Ask Jason
+only for things that require his account credentials or physical action
+(payment, OAuth, pasting a public key, accepting ToS). Report back with
+results, not step-by-step checkpoints that need his input.
