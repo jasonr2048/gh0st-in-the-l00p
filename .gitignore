@@ -16,3 +16,6 @@ spikes/display_validation/assets/
 data/*
 !data/dataset_tags.md
 !data/dataset_tags_exhibition.md
+
+# Generated exports
+exports/

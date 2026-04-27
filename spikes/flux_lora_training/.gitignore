@@ -1,0 +1,6 @@
+# Model weights, samples, and generated outputs — stored externally
+output/
+
+# Secrets
+.runpod_env
+.runpod_key
