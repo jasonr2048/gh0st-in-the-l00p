@@ -3,7 +3,7 @@
 # Run on pod: cd /workspace/ai-toolkit && python run.py /workspace/config/config.yaml
 job: extension
 config:
-  name: "gh0st_flux_lora_v1"
+  name: "gh0st_flux_lora_v2"
   process:
     - type: "sd_trainer"
       training_folder: "/workspace/output"
@@ -11,8 +11,8 @@ config:
       trigger_word: "sks"
       network:
         type: "lora"
-        linear: 16          # rank — bump to 32 if results look generic
-        linear_alpha: 16
+        linear: 32          # rank 32 — stronger identity lock than v1
+        linear_alpha: 32
       save:
         dtype: float16
         save_every: 500
@@ -48,12 +48,14 @@ config:
         width: 1024
         height: 1024
         prompts:
-          - "sks person, rhinestone makeup, portrait, black background"
-          - "sks person, blue face paint, portrait, black background"
-          - "sks person, clown makeup, theatrical, portrait, black background"
-          - "sks person, silicone skull mask, portrait, black background"
-          - "sks person, cyberpunk makeup, neon, portrait"
-          - "sks person, tribal face paint, portrait"
+          - "sks person, portrait, black background"
+          - "sks person, beaded face cage, red chin paint, portrait, black background"
+          - "sks person, red paint, black liner, graphic, portrait, black background"
+          - "sks person, blue face paint, alien, gems, portrait, black background"
+          - "sks person, gold nose hardware, ornate jewellery, portrait, black background"
+          - "sks person, black feathers, dramatic, portrait, black background"
+          - "sks person, circuit board face paint, pink drips, digital glitch, portrait, black background"
+          - "sks person, facelift prosthetics, sutured skin, horror, portrait, black background"
         neg: ""
         seed: 42
         walk_seed: true
