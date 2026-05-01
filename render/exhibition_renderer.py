@@ -499,6 +499,7 @@ class ExhibitionRenderer:
 
     def _load_font(self, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         font_candidates = (
+            Path(__file__).resolve().parent.parent / "fonts" / "CourierPrime-Regular.ttf",
             Path("C:/Windows/Fonts/consola.ttf"),
             Path("C:/Windows/Fonts/lucon.ttf"),
             Path("C:/Windows/Fonts/cour.ttf"),
