@@ -37,7 +37,7 @@ send "echo '=== last \$n log lines ==='; tail -n \$n /workspace/sequence.log 2>/
 expect { "__M2__" {} timeout { puts "timeout M2"; exit 1 } }
 expect -re {#\s}
 
-send "echo '=== output counts ==='; echo pure: \$(find /workspace/output/gh0st_flux_lora_v2/sequence/pure -name '*.png' 2>/dev/null | wc -l); for d in /workspace/output/gh0st_flux_lora_v2/sequence/*/; do n=\$(basename \$d); c=\$(find \$d -name '*.png' 2>/dev/null | wc -l); echo \$n: \$c; done; echo __M3__\r"
+send "echo '=== output counts ==='; find /workspace/output/gh0st_flux_lora_v2/sequence -name '*.png' 2>/dev/null | wc -l; ls /workspace/output/gh0st_flux_lora_v2/sequence/ 2>/dev/null; echo __M3__\r"
 expect { "__M3__" {} timeout {} }
 expect -re {#\s}
 

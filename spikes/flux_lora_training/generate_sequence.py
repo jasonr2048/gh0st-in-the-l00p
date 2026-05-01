@@ -48,6 +48,7 @@ WORKSPACE    = Path("/workspace")
 DATASET_DIR  = WORKSPACE / "dataset" / "lora_training_v2"
 LORA_PATH    = WORKSPACE / "output" / "gh0st_flux_lora_v2" / "gh0st_flux_lora_v2.safetensors"
 OUTPUT_DIR   = WORKSPACE / "output" / "gh0st_flux_lora_v2" / "sequence"
+MODELS_DIR   = WORKSPACE / "models"   # persistent cache — survives pod restarts
 FLUX_MODEL   = "black-forest-labs/FLUX.1-dev"
 REDUX_MODEL  = "black-forest-labs/FLUX.1-Redux-dev"
 
@@ -82,14 +83,29 @@ def load_image_rgb(path: Path, size: int = GEN_SIZE) -> Image.Image:
 
 
 def get_representative_image(set_name: str) -> Path:
-    """Return the middle image from a set as a stable style anchor."""
+    """Return the middle image for a style.
+
+    Supports two dataset layouts:
+    - Subdirectory:  DATASET_DIR/{set_name}/{set_name}_01.png  (prepared dataset)
+    - Flat:          DATASET_DIR/{set_name}_01.png             (lora_training_v2)
+    """
     set_dir = DATASET_DIR / set_name
-    images = sorted(
-        p for p in set_dir.iterdir()
-        if p.suffix.lower() in (".png", ".jpg", ".jpeg")
-    )
+    if set_dir.is_dir():
+        images = sorted(
+            p for p in set_dir.iterdir()
+            if p.suffix.lower() in (".png", ".jpg", ".jpeg")
+        )
+    else:
+        # Flat dataset: files named {set_name}_01.png etc.
+        images = sorted(
+            p for p in DATASET_DIR.iterdir()
+            if p.suffix.lower() in (".png", ".jpg", ".jpeg")
+            and p.stem.startswith(set_name + "_")
+        )
     if not images:
-        raise FileNotFoundError(f"No images in {set_dir}")
+        raise FileNotFoundError(
+            f"No images for style '{set_name}' in {DATASET_DIR}"
+        )
     return images[len(images) // 2]
 
 
@@ -122,10 +138,13 @@ def generate_pure_frames(versions: int = 1):
         return
 
     print(f"\n[Pure] Loading pipelines for {len(needed)} pure frame(s)...")
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
     pipe_prior = FluxPriorReduxPipeline.from_pretrained(
-        REDUX_MODEL, torch_dtype=torch.bfloat16
+        REDUX_MODEL, torch_dtype=torch.bfloat16, cache_dir=str(MODELS_DIR)
     ).to("cuda")
-    pipe = FluxPipeline.from_pretrained(FLUX_MODEL, torch_dtype=torch.bfloat16)
+    pipe = FluxPipeline.from_pretrained(
+        FLUX_MODEL, torch_dtype=torch.bfloat16, cache_dir=str(MODELS_DIR)
+    )
     pipe.load_lora_weights(str(LORA_PATH), adapter_name="gh0st")
     pipe.set_adapters(["gh0st"], adapter_weights=[LORA_SCALE])
     pipe.enable_sequential_cpu_offload()
@@ -185,10 +204,13 @@ def generate_transitions(versions: int = 1):
         return
 
     print(f"\n[Transitions] Loading pipelines ({total_needed} image(s) to generate)...")
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
     pipe_prior = FluxPriorReduxPipeline.from_pretrained(
-        REDUX_MODEL, torch_dtype=torch.bfloat16
+        REDUX_MODEL, torch_dtype=torch.bfloat16, cache_dir=str(MODELS_DIR)
     ).to("cuda")
-    pipe = FluxPipeline.from_pretrained(FLUX_MODEL, torch_dtype=torch.bfloat16)
+    pipe = FluxPipeline.from_pretrained(
+        FLUX_MODEL, torch_dtype=torch.bfloat16, cache_dir=str(MODELS_DIR)
+    )
     pipe.load_lora_weights(str(LORA_PATH), adapter_name="gh0st")
     pipe.set_adapters(["gh0st"], adapter_weights=[LORA_SCALE])
     pipe.enable_sequential_cpu_offload()

@@ -12,8 +12,8 @@ source "$SPIKE_DIR/.runpod_env"
 KEY="$SPIKE_DIR/.runpod_key"
 
 VERSIONS="${1:-1}"
-if [[ "$1" == "--versions" ]]; then
-    VERSIONS="$2"
+if [[ "${1:-}" == "--versions" ]]; then
+    VERSIONS="${2:-1}"
 fi
 
 DRIVE_DATASET="$HOME/Library/CloudStorage/GoogleDrive-jorb2048@gmail.com/My Drive/Gh0st in the Loop/dataset/lora_training_v2"
@@ -129,8 +129,8 @@ ok "LORA_OK"
 send "ls -lh /workspace/output/gh0st_flux_lora_v2/gh0st_flux_lora_v2.safetensors && echo LORA_VERIFY_OK\r"
 ok "LORA_VERIFY_OK"
 
-# Write HF token
-send "mkdir -p /root/.huggingface && printf '%s' '\$hf_token' > /root/.huggingface/token; echo TOKEN_OK\r"
+# Write HF token to both old and new locations, and export as env var
+send "mkdir -p /root/.huggingface /root/.cache/huggingface && printf '%s' '\$hf_token' > /root/.huggingface/token && printf '%s' '\$hf_token' > /root/.cache/huggingface/token && export HF_TOKEN='\$hf_token'; echo TOKEN_OK\r"
 ok "TOKEN_OK"
 
 # Remove any macOS xattr dirs
@@ -142,7 +142,7 @@ send "tmux kill-session -t sequence 2>/dev/null || true; echo KILL_OK\r"
 expect { "KILL_OK" {} timeout {} }
 expect -re {#\s}
 
-send "tmux new-session -d -s sequence 'cd /workspace && python generate_sequence.py --versions \$versions 2>&1 | tee /workspace/sequence.log; echo GENERATION_COMPLETE >> /workspace/sequence.log'; echo LAUNCH_OK\r"
+send "tmux new-session -d -s sequence 'cd /workspace && HF_TOKEN='\$hf_token' python generate_sequence.py --versions \$versions 2>&1 | tee /workspace/sequence.log; echo GENERATION_COMPLETE >> /workspace/sequence.log'; echo LAUNCH_OK\r"
 ok "LAUNCH_OK"
 
 send "sleep 5 && tail -10 /workspace/sequence.log 2>/dev/null || echo '(log not started yet)'; echo TAIL_OK\r"
