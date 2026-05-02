@@ -1,0 +1,30 @@
+{
+  "stable_node_a":     ["[NODE_A] style: rhinestones", "[NODE_A] rhinestones", "[NODE_A] > loading: rhinestones"],
+  "stable_node_b":     ["[NODE_B] style: rhinestones", "[NODE_B] rhinestones", "[NODE_B] > loading: rhinestones"],
+
+  "ambiguous_node_a":  ["[NODE_A] rhinestones → bead_cage", "[NODE_A] transitioning", "[NODE_A] > blend: rhinestones + bead_cage"],
+  "ambiguous_node_b":  ["[NODE_B] rhinestones → bead_cage", "[NODE_B] transitioning", "[NODE_B] > blend: rhinestones + bead_cage"],
+
+  "glitch_node_a":     ["[NODE_A] style: bead_cage", "[NODE_A] bead_cage", "[NODE_A] > loading: bead_cage"],
+  "glitch_node_b":     ["[NODE_B] style: bead_cage", "[NODE_B] bead_cage", "[NODE_B] > loading: bead_cage"],
+
+  "extreme_node_a":    ["[NODE_A] bead_cage → crybabyglitch", "[NODE_A] transitioning", "[NODE_A] > blend: bead_cage + crybabyglitch"],
+  "extreme_node_b":    ["[NODE_B] bead_cage → crybabyglitch", "[NODE_B] transitioning", "[NODE_B] > blend: bead_cage + crybabyglitch"],
+
+  "synthetic_node_a":  ["[NODE_A] style: crybabyglitch", "[NODE_A] crybabyglitch", "[NODE_A] > loading: crybabyglitch"],
+  "synthetic_node_b":  ["[NODE_B] style: crybabyglitch", "[NODE_B] crybabyglitch", "[NODE_B] > loading: crybabyglitch"],
+
+  "collapse_broken_a": ["[NODE_A] crybabyglitch → red_blackliner", "[NODE_A] transitioning", "[NODE_A] > blend: crybabyglitch + red_blackliner"],
+  "collapse_broken_b": ["[NODE_B] crybabyglitch → red_blackliner", "[NODE_B] transitioning", "[NODE_B] > blend: crybabyglitch + red_blackliner"],
+
+  "log_dump":          ["null", "collapse", "not a face"],
+
+  "state_shift":       [
+    "[SYS.STATE_SHIFT: rhinestones]",
+    "[SYS.STATE_SHIFT: rhinestones → bead_cage]",
+    "[SYS.STATE_SHIFT: bead_cage]",
+    "[SYS.STATE_SHIFT: bead_cage → crybabyglitch]",
+    "[SYS.STATE_SHIFT: crybabyglitch]",
+    "[SYS.STATE_SHIFT: crybabyglitch → red_blackliner]"
+  ]
+}

@@ -19,7 +19,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import sys
 import time
@@ -39,6 +38,7 @@ API_BASE     = "https://api.dev.runwayml.com/v1"
 API_VERSION  = "2024-11-06"
 MODEL        = "gen4_turbo"
 CLIP_DURATION = 5           # seconds; 5 is max for gen4_turbo
+IMAGE_RATIO  = "720:1280"   # closest portrait ratio supported by gen4_turbo
 PROMPT_TEXT  = (
     "subtle realistic face animation, gentle natural blink, soft micro-expressions, "
     "slight breathing movement, eyes alive, hair barely moves, neutral steady gaze, "
@@ -74,23 +74,50 @@ def headers(key: str) -> dict:
     }
 
 
-def image_to_data_uri(path: Path) -> str:
-    data = base64.b64encode(path.read_bytes()).decode()
-    return f"data:image/png;base64,{data}"
+CATBOX_URL   = "https://litterbox.catbox.moe/resources/internals/api.php"
+
+
+def upload_image(path: Path, retries: int = 3) -> str:
+    """Upload image to litterbox.catbox.moe (24h TTL) and return public URL.
+
+    The Runway API no longer accepts base64 data URIs — it needs a fetchable URL.
+    Retries on timeout since catbox can be slow.
+    """
+    for attempt in range(1, retries + 1):
+        try:
+            with open(path, "rb") as f:
+                resp = requests.post(
+                    CATBOX_URL,
+                    data={"reqtype": "fileupload", "time": "24h"},
+                    files={"fileToUpload": (path.name, f, "image/png")},
+                    timeout=120,
+                )
+            resp.raise_for_status()
+            url = resp.text.strip()
+            if url.startswith("https"):
+                return url
+            raise RuntimeError(f"Catbox upload returned unexpected response: {url}")
+        except (requests.Timeout, requests.ConnectionError) as e:
+            if attempt == retries:
+                raise
+            print(f"    Upload attempt {attempt} failed ({e}), retrying…")
+            time.sleep(5)
+    raise RuntimeError("Upload failed after all retries")
 
 
 def submit_task(key: str, image_path: Path) -> str:
-    """Submit an img2vid task; return task ID."""
+    """Upload image, submit img2vid task; return task ID."""
+    image_url = upload_image(image_path)
     payload = {
         "model": MODEL,
-        "promptImage": image_to_data_uri(image_path),
+        "promptImage": image_url,
         "promptText": PROMPT_TEXT,
         "duration": CLIP_DURATION,
-        "ratio": "768:1344",    # portrait 9:16-ish
+        "ratio": IMAGE_RATIO,
     }
     resp = requests.post(f"{API_BASE}/image_to_video", headers=headers(key), json=payload)
     if resp.status_code == 429:
-        sys.exit("ERROR: Daily generation limit reached. Try again tomorrow or switch to gen3a_turbo.")
+        sys.exit("ERROR: Daily generation limit reached. Try again tomorrow.")
     resp.raise_for_status()
     task_id = resp.json()["id"]
     return task_id
