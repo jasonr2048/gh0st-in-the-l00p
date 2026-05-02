@@ -1,0 +1,132 @@
+# Exhibition source image selection — v2 (full list)
+# Paths are relative to faces_exhibition/ on Drive.
+# Delete lines for images to skip. Order within each category determines video sequence.
+#
+# Screen A sequence: stable → ambiguous → glitch → extreme → synthetic
+# Screen B sequence: extreme → synthetic → stable → ambiguous → glitch
+
+# stable
+stable/cuti.png
+stable/Cyber.png
+stable/Cyber2.png
+stable/meweird.png
+stable/plat.png
+stable/platinum.png
+stable/yeni (10).png
+stable/yeni (11).png
+stable/yeni (5).png
+stable/yeni (6).png
+stable/yeni (9).png
+
+# ambiguous
+ambiguous/anim.png
+ambiguous/anim2.png
+ambiguous/blackas.png
+ambiguous/DSC08483.png
+ambiguous/DSC08495.png
+ambiguous/Facelift (1).png
+ambiguous/Facelift (2).png
+ambiguous/labob.png
+ambiguous/lalalal.png
+ambiguous/panda.jpg
+ambiguous/panda2.jpg
+ambiguous/red-dot.jpg
+ambiguous/redered.jpg
+ambiguous/redered2.jpg
+ambiguous/taslar (4).png
+ambiguous/yeni (3).png
+ambiguous/yeni (4).png
+ambiguous/yeni (8).png
+
+# glitch
+glitch/17.png
+glitch/178.png
+glitch/bat.jpg
+glitch/blacal (1).png
+glitch/blacal (5).png
+glitch/blacal (6).png
+glitch/bluefc (1).png
+glitch/bluefc (4).png
+glitch/crybaby1 (1).png
+glitch/dudak (1).png
+glitch/dudak (3).png
+glitch/IDF.jpg
+glitch/IDF1.jpg
+glitch/IMG_20260310_224622_163.png
+glitch/IMG_20260310_224628_117.png
+glitch/indi.png
+glitch/kamu.png
+glitch/kamu2.png
+glitch/KeramikMask (1).png
+glitch/KeramikMask (3).png
+glitch/labi.png
+glitch/labicin.png
+glitch/milit.jpg
+glitch/milita.jpg
+glitch/popbro.png
+glitch/popbrok.png
+glitch/popcorn.png
+glitch/smile.jpg
+glitch/smile2.jpg
+glitch/tactical (1).jpeg
+glitch/tactical (2).png
+glitch/taki (1).png
+glitch/taki (2).png
+glitch/taqqi (1).png
+glitch/taqqi (2).png
+glitch/yeni (14).png
+glitch/yeni (15).png
+glitch/yeni (16).png
+glitch/yeni (17).png
+glitch/yeni (7).png
+
+# extreme
+extreme/batu.jpg
+extreme/bodhor.png
+extreme/bodhor2.png
+extreme/carsaf.jpg
+extreme/coverhor.png
+extreme/coverhor1 (3).png
+extreme/coverpunk.png
+extreme/coverpunk1 (4).png
+extreme/faceless.png
+extreme/faceless3.png
+extreme/hurcov1 (1).png
+extreme/IMG_20260310_224131_630.png
+extreme/IMG_20260310_224133_436.png
+extreme/IMG_20260310_224212_825.png
+extreme/kus.jpg
+extreme/mask.jpg
+extreme/mask2.jpg
+extreme/maskim.png
+extreme/Metalgear (3).png
+extreme/Metalgear (4).png
+extreme/Metalgear (7).png
+extreme/MUTATE (1).png
+extreme/MUTATE (2).png
+extreme/sac.png
+extreme/siliskull (1).png
+extreme/siliskull (9).png
+extreme/yeni (13).png
+extreme/yeni (2).png
+extreme/yilan.jpg
+
+# synthetic
+synthetic/biohazard.png
+synthetic/blacksnk.png
+synthetic/Clown1 (1).png
+synthetic/crybabyglitch.png
+synthetic/crybabyglitch1 (4).png
+synthetic/dudak (1).png
+synthetic/dudak (3).png
+synthetic/dudak (5).png
+synthetic/HH (2).png
+synthetic/HH.png
+synthetic/popcorn.png
+synthetic/red-w.png
+synthetic/red-w1 (1).png
+synthetic/SNAP.png
+synthetic/synt.jpg
+synthetic/yeni (12).png
+synthetic/yeni (15).png
+synthetic/yeni (7).png

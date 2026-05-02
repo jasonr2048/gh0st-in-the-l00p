@@ -1,0 +1,71 @@
+# Exhibition source image selection — v1 (first-pass dedup)
+# Paths are relative to faces_exhibition/ on Drive.
+# Order within each category determines video sequence.
+#
+# Screen A sequence: stable → ambiguous → glitch → extreme → synthetic
+# Screen B sequence: extreme → synthetic → stable → ambiguous → glitch
+#
+# Selection: one image per visual style group, highest-res variant kept.
+# Total: 52 styles → 52 pure stills + 94 within-category mashups + 10 boundary mashups = 156 stills
+
+# stable (5)
+stable/cuti.png
+stable/Cyber.png
+stable/meweird.png
+stable/platinum.png
+stable/yeni (5).png
+
+# ambiguous (10)
+ambiguous/anim.png
+ambiguous/blackas.png
+ambiguous/DSC08483.png
+ambiguous/Facelift (1).png
+ambiguous/labob.png
+ambiguous/panda2.jpg
+ambiguous/red-dot.jpg
+ambiguous/redered2.jpg
+ambiguous/taslar (4).png
+ambiguous/yeni (3).png
+
+# glitch (15)
+glitch/bat.jpg
+glitch/blacal (1).png
+glitch/bluefc (1).png
+glitch/crybaby1 (1).png
+glitch/IDF.jpg
+glitch/indi.png
+glitch/kamu.png
+glitch/KeramikMask (1).png
+glitch/labi.png
+glitch/milita.jpg
+glitch/popbro.png
+glitch/smile.jpg
+glitch/tactical (2).png
+glitch/taki (1).png
+glitch/taqqi (1).png
+
+# extreme (13)
+extreme/bodhor.png
+extreme/carsaf.jpg
+extreme/coverhor.png
+extreme/coverpunk.png
+extreme/faceless.png
+extreme/mask2.jpg
+extreme/maskim.png
+extreme/Metalgear (3).png
+extreme/MUTATE (1).png
+extreme/sac.png
+extreme/siliskull (1).png
+extreme/yeni (2).png
+extreme/yilan.jpg
+
+# synthetic (9)
+synthetic/biohazard.png
+synthetic/blacksnk.png
+synthetic/Clown1 (1).png
+synthetic/crybabyglitch.png
+synthetic/dudak (1).png
+synthetic/HH.png
+synthetic/red-w.png
+synthetic/SNAP.png
+synthetic/yeni (12).png
