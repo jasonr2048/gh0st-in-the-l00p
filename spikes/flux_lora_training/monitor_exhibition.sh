@@ -43,7 +43,7 @@ send "echo '=== last \$n log lines ===' && tail -n \$n /workspace/exhibition.log
 expect { "__M2__" {} timeout { puts "timeout M2"; exit 1 } }
 expect -re {#\s}
 
-send "echo '=== output counts ===' && for d in /workspace/output/gh0st_exhibition_*/; do echo \"--- \$(basename \$d)\"; find \"\$d\" -name '*.png' | wc -l; done 2>/dev/null || echo '(no output yet)'; echo __M3__\r"
+send "echo '=== output counts ===' && find /workspace/output/gh0st_exhibition_*/ -name '*.png' 2>/dev/null | wc -l && ls /workspace/output/ 2>/dev/null || echo '(no output yet)'; echo __M3__\r"
 expect { "__M3__" {} timeout {} }
 expect -re {#\s}
 

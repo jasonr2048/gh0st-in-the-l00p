@@ -170,7 +170,7 @@ send "tar -xzf /tmp/exhibition_source.tar.gz -C /workspace && echo EXTRACT_OK\r"
 ok "EXTRACT_OK"
 
 # Verify
-send "ls /workspace/generate_exhibition.py && echo \$(find /workspace/exhibition_source -type f ! -name '*.txt' | wc -l) source images && echo VERIFY_SOURCE_OK\r"
+send "ls /workspace/generate_exhibition.py && find /workspace/exhibition_source -type f | wc -l && echo VERIFY_SOURCE_OK\r"
 ok "VERIFY_SOURCE_OK"
 
 # LoRA — only download if not already present
