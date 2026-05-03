@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Fetch exhibition stills from pod → local output/
-# Uses tar → litterbox.catbox.moe → local wget.
+# Fetch exhibition stills from pod → local output/.
+# RunPod's SSH proxy forces PTY so direct tar-pipe/rsync don't work.
+# Workaround: tar on pod → upload to catbox → wget locally.
 #
 # Usage:
 #   bash spikes/flux_lora_training/fetch_exhibition.sh
@@ -23,27 +24,17 @@ done
 LOCAL_OUT="$SPIKE_DIR/output/$OUTPUT_NAME"
 mkdir -p "$LOCAL_OUT"
 
-POD_OUT="/workspace/output/$OUTPUT_NAME"
-
-echo "=== [1/4] Connecting to pod to tar & upload... ==="
+echo "=== [1/3] Tarring + uploading from pod to catbox ==="
 
 EXPECT_SCRIPT=$(mktemp /tmp/fetch_exh_XXXXXX.expect)
 trap 'rm -f "$EXPECT_SCRIPT"' EXIT
 
 cat > "$EXPECT_SCRIPT" << TCEOF
 #!/usr/bin/expect -f
-set timeout 300
-set key      [lindex \$argv 0]
-set host     [lindex \$argv 1]
-set pod_out  [lindex \$argv 2]
-
-proc ok {marker} {
-    expect {
-        \$marker {}
-        timeout { puts stderr "TIMEOUT: \$marker"; exit 1 }
-    }
-    expect -re {#\s}
-}
+set timeout 60
+set key  [lindex \$argv 0]
+set host [lindex \$argv 1]
+set name [lindex \$argv 2]
 
 spawn ssh -t \\
     -i \$key \\
@@ -55,48 +46,51 @@ spawn ssh -t \\
 expect -re {#\s}
 
 # Count what's there
-send "echo '=== output counts ===' && find \$pod_out -name '*.png' 2>/dev/null | wc -l && ls \$pod_out 2>/dev/null; echo COUNTS_OK\r"
-ok "COUNTS_OK"
+send "find /workspace/output/\$name -name '*.png' | wc -l; echo COUNT_OK\r"
+expect { "COUNT_OK" {} timeout { puts "timeout COUNT"; exit 1 } }
+expect -re {#\s}
 
-# Tar the output
-send "cd /workspace/output && tar -czf /tmp/exhibition_out.tar.gz \$(basename \$pod_out)/ && ls -lh /tmp/exhibition_out.tar.gz; echo TAR_OK\r"
-set timeout 300
-ok "TAR_OK"
+# Tar it
+send "cd /workspace/output && tar -czf /tmp/\${name}.tar.gz \$name/ && ls -lh /tmp/\${name}.tar.gz; echo TAR_OK\r"
+set timeout 120
+expect { "TAR_OK" {} timeout { puts "timeout TAR"; exit 1 } }
+expect -re {#\s}
 
-# Upload to catbox
-send "curl -s -F 'reqtype=fileupload' -F 'time=24h' -F 'fileToUpload=@/tmp/exhibition_out.tar.gz' https://litterbox.catbox.moe/resources/internals/api.php; echo UPLOAD_DONE\r"
+# Upload to catbox — print URL on its own line then a marker
+send "echo CATBOX_START && curl -s -F 'reqtype=fileupload' -F 'time=24h' -F 'fileToUpload=@/tmp/\${name}.tar.gz' https://litterbox.catbox.moe/resources/internals/api.php && echo CATBOX_END\r"
 set timeout 600
-ok "UPLOAD_DONE"
+expect { "CATBOX_END" {} timeout { puts "timeout CATBOX"; exit 1 } }
+expect -re {#\s}
 
 send "exit\r"
 expect eof
 TCEOF
 chmod +x "$EXPECT_SCRIPT"
 
-echo "=== [2/4] Uploading tar to litterbox.catbox.moe... ==="
-RAW=$(expect "$EXPECT_SCRIPT" "$KEY" "$POD_HOST" "$POD_OUT" 2>&1 | \
-  grep -v '^\[?2004' | \
-  sed 's/\x1b\[[0-9;]*[mKHF]//g' | \
-  sed 's/\r//')
+RAW=$(expect "$EXPECT_SCRIPT" "$KEY" "$POD_HOST" "$OUTPUT_NAME" 2>&1 | \
+  sed 's/\x1b\[[0-9;]*[mKHF]//g' | tr -d '\r')
 
-echo "$RAW" | tail -20
+# Print filtered output for visibility
+echo "$RAW" | grep -Ev '^\[.2004|RUNPOD|Enjoy|Warning|Permanently|^spawn ' | \
+  grep -v '^$' | tail -20
 
-URL=$(echo "$RAW" | grep -oE 'https://litter\.catbox\.moe/[a-zA-Z0-9]+\.(gz|tar\.gz|tgz)' | head -1)
+# Extract URL — it appears between CATBOX_START and CATBOX_END
+URL=$(echo "$RAW" | grep -oE 'https://litter\.catbox\.moe/[^ ]+' | head -1)
 
 if [[ -z "$URL" ]]; then
     echo ""
-    echo "[ERROR] No catbox URL found in output above."
-    echo "  The generation may still be running — check with monitor_exhibition.sh"
+    echo "[ERROR] No catbox URL found. Raw output above — check for upload errors."
     exit 1
 fi
 
 echo ""
-echo "=== [3/4] Downloading from: $URL ==="
-wget -q --show-progress "$URL" -O /tmp/exhibition_out.tar.gz
+echo "=== [2/3] Downloading from catbox: $URL ==="
+wget -q --show-progress "$URL" -O "/tmp/${OUTPUT_NAME}.tar.gz"
 
 echo ""
-echo "=== [4/4] Extracting to $LOCAL_OUT/ ==="
-tar -xzf /tmp/exhibition_out.tar.gz -C "$SPIKE_DIR/output/"
+echo "=== [3/3] Extracting to $LOCAL_OUT/ ==="
+tar -xzf "/tmp/${OUTPUT_NAME}.tar.gz" -C "$SPIKE_DIR/output/"
+rm -f "/tmp/${OUTPUT_NAME}.tar.gz"
 
 echo ""
 echo "=== Local output: $LOCAL_OUT ==="
@@ -108,6 +102,4 @@ done
 total=$(find "$LOCAL_OUT" -name '*.png' 2>/dev/null | wc -l | tr -d ' ')
 echo "  Total: $total stills"
 echo ""
-echo "=== DONE ==="
-echo "Stop the pod when fetching is confirmed complete:"
-echo "  https://www.runpod.io/console/pods"
+echo "=== DONE — stop the pod: https://www.runpod.io/console/pods ==="
