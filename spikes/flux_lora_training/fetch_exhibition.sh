@@ -57,7 +57,7 @@ expect { "TAR_OK" {} timeout { puts "timeout TAR"; exit 1 } }
 expect -re {#\s}
 
 # Upload to catbox — print URL on its own line then a marker
-send "echo CATBOX_START && curl -s -F 'reqtype=fileupload' -F 'time=24h' -F 'fileToUpload=@/tmp/\${name}.tar.gz' https://litterbox.catbox.moe/resources/internals/api.php && echo CATBOX_END\r"
+send "echo CATBOX_START && curl -s -F 'reqtype=fileupload' -F 'time=24h' -F 'fileToUpload=@/tmp/\${name}.tar.gz' https://litterbox.catbox.moe/resources/internals/api.php && printf '\\n' && echo CATBOX_END\r"
 set timeout 600
 expect { "CATBOX_END" {} timeout { puts "timeout CATBOX"; exit 1 } }
 expect -re {#\s}
