@@ -75,7 +75,7 @@ echo "$RAW" | grep -Ev '^\[.2004|RUNPOD|Enjoy|Warning|Permanently|^spawn ' | \
   grep -v '^$' | tail -20
 
 # Extract URL — it appears between CATBOX_START and CATBOX_END
-URL=$(echo "$RAW" | grep -oE 'https://litter\.catbox\.moe/[^ ]+' | head -1)
+URL=$(echo "$RAW" | grep -oE 'https://litter\.catbox\.moe/[a-zA-Z0-9.]+' | head -1)
 
 if [[ -z "$URL" ]]; then
     echo ""
