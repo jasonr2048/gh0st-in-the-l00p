@@ -35,11 +35,15 @@ spawn ssh -t \\
 
 expect -re {#\s}
 
-send "tmux has-session -t exhibition 2>/dev/null && echo 'STATUS: running' || echo 'STATUS: stopped'; echo __M1__\r"
+send "tmux list-sessions 2>/dev/null || echo '(no tmux sessions)'; echo __M1__\r"
 expect { "__M1__" {} timeout { puts "timeout M1"; exit 1 } }
 expect -re {#\s}
 
-send "echo '=== last \$n log lines ===' && tail -n \$n /workspace/exhibition.log 2>/dev/null || echo '(no log yet)'; echo __M2__\r"
+send "echo '=== setup log (last 10) ===' && tail -10 /workspace/setup.log 2>/dev/null || echo '(no setup log)'; echo __M1B__\r"
+expect { "__M1B__" {} timeout {} }
+expect -re {#\s}
+
+send "echo '=== last \$n exhibition log lines ===' && tail -n \$n /workspace/exhibition.log 2>/dev/null || echo '(no exhibition log yet)'; echo __M2__\r"
 expect { "__M2__" {} timeout { puts "timeout M2"; exit 1 } }
 expect -re {#\s}
 
@@ -66,6 +70,6 @@ expect "$EXPECT_SCRIPT" "$KEY" "$POD_HOST" "$n" 2>&1 | \
   grep -v 'RUNPOD.IO' | \
   grep -v 'Enjoy your Pod' | \
   grep -v '^--$' | \
-  grep -v '__M[1-4]__' | \
+  grep -v '__M[1-4]__\|__M1B__' | \
   grep -v 'exit$' | \
   grep -v 'Connection to.*closed'
