@@ -51,7 +51,7 @@ LORA_SCALE      = 0.90
 GEN_SIZE        = 1024
 SEED            = 42
 
-MASHUP_ALPHAS   = [0.30, 0.70]   # 30/70 and 70/30 blends
+MASHUP_ALPHAS   = [0.70, 0.50, 0.30]   # smooth ramp: 70/30 → 50/50 → 30/70
 
 # Category order for each screen — determines which boundary pairs we need
 SCREEN_A = ["stable", "ambiguous", "glitch", "extreme", "synthetic"]
