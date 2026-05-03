@@ -15,7 +15,7 @@ source "$SPIKE_DIR/.runpod_env"
 KEY="$SPIKE_DIR/.runpod_key"
 
 # ── Defaults (override via flags) ──────────────────────────────────────────
-SELECTION_FILE="selection_v1.txt"
+SELECTION_FILE="selection_v1_normalized.txt"
 OUTPUT_NAME="gh0st_exhibition_v1"
 
 while [[ $# -gt 0 ]]; do
@@ -26,7 +26,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-DRIVE_FACES="$HOME/Library/CloudStorage/GoogleDrive-jorb2048@gmail.com/My Drive/Gh0st in the Loop/faces_exhibition"
+# Normalized source images: YOLOv8-cropped 1024×1024 PNGs
+NORMALIZED_DIR="$SPIKE_DIR/exhibition_source/normalized"
 SELECTION_PATH="$SPIKE_DIR/exhibition_source/$SELECTION_FILE"
 LORA_FILE="$SPIKE_DIR/output/gh0st_flux_lora_v2/gh0st_flux_lora_v2.safetensors"
 SCRIPT_FILE="$SPIKE_DIR/generate_exhibition.py"
@@ -67,11 +68,11 @@ mkdir -p "$SOURCE_STAGING"
 # Copy selection file
 cp "$SELECTION_PATH" "$SOURCE_STAGING/$SELECTION_FILE"
 
-# Copy all referenced source images, preserving category/filename structure
+# Copy all referenced source images from normalized dir, preserving structure
 missing=0
 while IFS= read -r line; do
     [[ -z "$line" || "$line" == "#"* ]] && continue
-    src="$DRIVE_FACES/$line"
+    src="$NORMALIZED_DIR/$line"
     cat_dir=$(dirname "$line")
     dst_dir="$SOURCE_STAGING/$cat_dir"
     mkdir -p "$dst_dir"
@@ -85,7 +86,7 @@ done < "$SELECTION_PATH"
 
 total_imgs=$(find "$SOURCE_STAGING" -type f ! -name "*.txt" | wc -l | tr -d ' ')
 echo "  Packed $total_imgs source images ($missing missing)"
-[[ $missing -gt 0 ]] && echo "  WARNING: $missing files not found — check Drive sync"
+[[ $missing -gt 0 ]] && echo "  WARNING: $missing files not found — run crop_exhibition_sources.py first"
 
 # Copy script
 cp "$SCRIPT_FILE" "$TMP_DIR/generate_exhibition.py"
