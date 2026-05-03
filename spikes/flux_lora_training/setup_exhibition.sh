@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Setup pod for exhibition generation + launch.
 #
-# Packs source images (per selection file) + generate_exhibition.py + LoRA,
-# uploads to litterbox.catbox.moe, deploys to pod, launches in tmux.
+# Volume-aware: LoRA and source images are only uploaded if not already
+# present on /workspace (network volume). generate_exhibition.py is always
+# refreshed. On first use this uploads everything; subsequent runs skip
+# the large uploads and just deploy the latest script + launch.
 #
 # Usage:
 #   bash spikes/flux_lora_training/setup_exhibition.sh
@@ -26,7 +28,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Normalized source images: YOLOv8-cropped 1024×1024 PNGs
 NORMALIZED_DIR="$SPIKE_DIR/exhibition_source/normalized"
 SELECTION_PATH="$SPIKE_DIR/exhibition_source/$SELECTION_FILE"
 LORA_FILE="$SPIKE_DIR/output/gh0st_flux_lora_v2/gh0st_flux_lora_v2.safetensors"
@@ -57,89 +58,132 @@ catbox_upload() {
     echo "$url" > "$out"
 }
 
-# ── [1] Pack source images listed in selection file ─────────────────────────
-echo "=== [1/4] Packaging source images ==="
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-SOURCE_STAGING="$TMP_DIR/exhibition_source"
-mkdir -p "$SOURCE_STAGING"
+# ── [1] Check what's already on the volume ─────────────────────────────────
+echo "=== [1/4] Checking what's already on the volume ==="
 
-# Copy selection file
-cp "$SELECTION_PATH" "$SOURCE_STAGING/$SELECTION_FILE"
+PROBE_SCRIPT=$(mktemp /tmp/probe_XXXXXX.expect)
+trap 'rm -f "$PROBE_SCRIPT"; rm -rf "$TMP_DIR"' EXIT
 
-# Copy all referenced source images from normalized dir, preserving structure
-missing=0
-while IFS= read -r line; do
-    [[ -z "$line" || "$line" == "#"* ]] && continue
-    src="$NORMALIZED_DIR/$line"
-    cat_dir=$(dirname "$line")
-    dst_dir="$SOURCE_STAGING/$cat_dir"
-    mkdir -p "$dst_dir"
-    if [[ -f "$src" ]]; then
-        cp "$src" "$dst_dir/"
-    else
-        echo "  WARNING: source not found: $src"
-        missing=$((missing + 1))
-    fi
-done < "$SELECTION_PATH"
+cat > "$PROBE_SCRIPT" << 'TCEOF'
+#!/usr/bin/expect -f
+set key  [lindex $argv 0]
+set host [lindex $argv 1]
+set timeout 30
 
-total_imgs=$(find "$SOURCE_STAGING" -type f ! -name "*.txt" | wc -l | tr -d ' ')
-echo "  Packed $total_imgs source images ($missing missing)"
-[[ $missing -gt 0 ]] && echo "  WARNING: $missing files not found — run crop_exhibition_sources.py first"
+spawn ssh -t \
+    -i $key \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o ServerAliveInterval=30 \
+    $host
 
-# Copy script
+expect -re {#\s}
+send "test -f /workspace/output/gh0st_flux_lora_v2/gh0st_flux_lora_v2.safetensors && echo LORA_EXISTS || echo LORA_MISSING\r"
+expect -re {#\s}
+send "test -d /workspace/exhibition_source && find /workspace/exhibition_source -name '*.png' | wc -l | tr -d ' ' && echo SOURCES_CHECKED\r"
+expect { "SOURCES_CHECKED" {} timeout {} }
+expect -re {#\s}
+send "exit\r"
+expect eof
+TCEOF
+chmod +x "$PROBE_SCRIPT"
+
+PROBE_OUT=$(expect "$PROBE_SCRIPT" "$KEY" "$POD_HOST" 2>&1 | \
+    sed 's/\x1b\[[0-9;]*[mKHF]//g' | tr -d '\r')
+
+LORA_ON_VOLUME=false
+SOURCES_ON_VOLUME=false
+
+if echo "$PROBE_OUT" | grep -q "LORA_EXISTS"; then
+    LORA_ON_VOLUME=true
+    echo "  LoRA        : already on volume ✓"
+else
+    echo "  LoRA        : not found — will upload"
+fi
+
+SOURCE_COUNT=$(echo "$PROBE_OUT" | grep -E '^\s*[0-9]+\s*$' | tr -d ' ' | head -1)
+if [[ -n "$SOURCE_COUNT" && "$SOURCE_COUNT" -gt 0 ]]; then
+    SOURCES_ON_VOLUME=true
+    echo "  Sources     : $SOURCE_COUNT images already on volume ✓"
+else
+    echo "  Sources     : not found — will upload"
+fi
+
+# ── [2] Package and upload what's missing ──────────────────────────────────
+echo ""
+echo "=== [2/4] Packaging and uploading ==="
+
+# Always upload the latest script + selection file (small, may have changed)
+SCRIPT_TAR="$TMP_DIR/script.tar.gz"
 cp "$SCRIPT_FILE" "$TMP_DIR/generate_exhibition.py"
+cp "$SELECTION_PATH" "$TMP_DIR/$SELECTION_FILE"
+tar -czf "$SCRIPT_TAR" -C "$TMP_DIR" "generate_exhibition.py" "$SELECTION_FILE"
+URL_SCRIPT_FILE="$TMP_DIR/url_script.txt"
+catbox_upload "$SCRIPT_TAR" "generate_exhibition.py + selection" "$URL_SCRIPT_FILE"
+URL_SCRIPT=$(cat "$URL_SCRIPT_FILE")
 
-echo "  Tarballing source images + script..."
-SOURCE_TAR="$TMP_DIR/exhibition_source.tar.gz"
-tar -czf "$SOURCE_TAR" \
-    --exclude="._*" \
-    --exclude=".DS_Store" \
-    -C "$TMP_DIR" exhibition_source generate_exhibition.py \
-    2>/dev/null || true
-echo "  Source tar: $(du -sh "$SOURCE_TAR" | cut -f1)"
+# Source images — only if not on volume
+URL_SOURCE=""
+if [[ "$SOURCES_ON_VOLUME" == "false" ]]; then
+    SOURCE_STAGING="$TMP_DIR/exhibition_source"
+    mkdir -p "$SOURCE_STAGING"
+    cp "$SELECTION_PATH" "$SOURCE_STAGING/$SELECTION_FILE"
+    missing=0
+    while IFS= read -r line; do
+        [[ -z "$line" || "$line" == "#"* ]] && continue
+        src="$NORMALIZED_DIR/$line"
+        cat_dir=$(dirname "$line")
+        mkdir -p "$SOURCE_STAGING/$cat_dir"
+        if [[ -f "$src" ]]; then
+            cp "$src" "$SOURCE_STAGING/$cat_dir/"
+        else
+            echo "  WARNING: source not found: $src"
+            missing=$((missing + 1))
+        fi
+    done < "$SELECTION_PATH"
+    total_imgs=$(find "$SOURCE_STAGING" -type f ! -name "*.txt" | wc -l | tr -d ' ')
+    echo "  Packed $total_imgs source images ($missing missing)"
+    SOURCE_TAR="$TMP_DIR/exhibition_source.tar.gz"
+    tar -czf "$SOURCE_TAR" --exclude="._*" --exclude=".DS_Store" \
+        -C "$TMP_DIR" exhibition_source 2>/dev/null || true
+    URL_SOURCE_FILE="$TMP_DIR/url_source.txt"
+    catbox_upload "$SOURCE_TAR" "exhibition source images" "$URL_SOURCE_FILE"
+    URL_SOURCE=$(cat "$URL_SOURCE_FILE")
+fi
 
-echo "  Tarballing LoRA..."
-LORA_TAR="$TMP_DIR/lora.tar.gz"
-tar -czf "$LORA_TAR" -C "$(dirname "$LORA_FILE")" "$(basename "$LORA_FILE")"
-echo "  LoRA tar: $(du -sh "$LORA_TAR" | cut -f1)"
-
-# ── [2] Upload ──────────────────────────────────────────────────────────────
-echo ""
-echo "=== [2/4] Uploading to litterbox.catbox.moe ==="
-URL_SOURCE_FILE="$TMP_DIR/url_source.txt"
-URL_LORA_FILE="$TMP_DIR/url_lora.txt"
-
-catbox_upload "$SOURCE_TAR" "exhibition source + script" "$URL_SOURCE_FILE"
-catbox_upload "$LORA_TAR"   "LoRA weights"              "$URL_LORA_FILE"
-
-URL_SOURCE=$(cat "$URL_SOURCE_FILE")
-URL_LORA=$(cat "$URL_LORA_FILE")
-
-echo ""
-echo "  source URL : $URL_SOURCE"
-echo "  LoRA URL   : $URL_LORA"
+# LoRA — only if not on volume
+URL_LORA=""
+if [[ "$LORA_ON_VOLUME" == "false" ]]; then
+    LORA_TAR="$TMP_DIR/lora.tar.gz"
+    tar -czf "$LORA_TAR" -C "$(dirname "$LORA_FILE")" "$(basename "$LORA_FILE")"
+    URL_LORA_FILE="$TMP_DIR/url_lora.txt"
+    catbox_upload "$LORA_TAR" "LoRA weights" "$URL_LORA_FILE"
+    URL_LORA=$(cat "$URL_LORA_FILE")
+fi
 
 # ── [3] Deploy & launch on pod ─────────────────────────────────────────────
 echo ""
 echo "=== [3/4] Deploying to pod and launching ==="
 
 EXPECT_SCRIPT=$(mktemp /tmp/setup_exh_XXXXXX.expect)
-trap 'rm -f "$EXPECT_SCRIPT"; rm -rf "$TMP_DIR"' EXIT
+trap 'rm -f "$PROBE_SCRIPT" "$EXPECT_SCRIPT"; rm -rf "$TMP_DIR"' EXIT
 
 cat > "$EXPECT_SCRIPT" << TCEOF
 #!/usr/bin/expect -f
 set timeout 600
-set key         [lindex \$argv 0]
-set host        [lindex \$argv 1]
-set url_source  [lindex \$argv 2]
-set url_lora    [lindex \$argv 3]
-set hf_token    [lindex \$argv 4]
-set sel_file    [lindex \$argv 5]
-set out_name    [lindex \$argv 6]
+set key          [lindex \$argv 0]
+set host         [lindex \$argv 1]
+set url_script   [lindex \$argv 2]
+set url_source   [lindex \$argv 3]
+set url_lora     [lindex \$argv 4]
+set hf_token     [lindex \$argv 5]
+set sel_file     [lindex \$argv 6]
+set out_name     [lindex \$argv 7]
 
-proc ok {marker} {
+proc wait_for {marker} {
     expect {
         \$marker {}
         timeout { puts stderr "TIMEOUT waiting for \$marker"; exit 1 }
@@ -156,59 +200,53 @@ spawn ssh -t \\
 
 expect -re {#\s}
 
-# Directories
 send "mkdir -p /workspace/exhibition_source /workspace/output; echo DIRS_OK\r"
-ok "DIRS_OK"
+wait_for "DIRS_OK"
 
-# Download source tar
-send "echo 'Downloading exhibition source...' && wget -q '\$url_source' -O /tmp/exhibition_source.tar.gz && echo DL_SOURCE_OK\r"
-set timeout 300
-ok "DL_SOURCE_OK"
+# Always deploy latest script + selection file
+send "wget -q '\$url_script' -O /tmp/script.tar.gz && tar -xzf /tmp/script.tar.gz -C /workspace && echo SCRIPT_OK\r"
+set timeout 120
+wait_for "SCRIPT_OK"
 set timeout 600
 
-# Extract — script lands at /workspace/generate_exhibition.py, images at /workspace/exhibition_source/
-send "tar -xzf /tmp/exhibition_source.tar.gz -C /workspace && echo EXTRACT_OK\r"
-ok "EXTRACT_OK"
-
-# Verify
-send "ls /workspace/generate_exhibition.py && find /workspace/exhibition_source -type f | wc -l && echo VERIFY_SOURCE_OK\r"
-ok "VERIFY_SOURCE_OK"
-
-# LoRA — only download if not already present
-send "if [ -f /workspace/output/gh0st_flux_lora_v2/gh0st_flux_lora_v2.safetensors ]; then echo LORA_EXISTS; else echo LORA_NEED_DL; fi\r"
-expect {
-    "LORA_EXISTS" {
-        expect -re {#\s}
-        send "echo LORA_OK\r"
-        ok "LORA_OK"
-    }
-    "LORA_NEED_DL" {
-        expect -re {#\s}
-        send "mkdir -p /workspace/output/gh0st_flux_lora_v2 && wget -q '\$url_lora' -O /tmp/lora.tar.gz && tar -xzf /tmp/lora.tar.gz -C /workspace/output/gh0st_flux_lora_v2/ && echo LORA_OK\r"
-        set timeout 600
-        ok "LORA_OK"
-    }
-    timeout { puts stderr "TIMEOUT checking LoRA"; exit 1 }
+# Source images — only if URL provided
+if {"\$url_source" ne ""} {
+    send "echo 'Downloading source images...' && wget -q '\$url_source' -O /tmp/exhibition_source.tar.gz && tar -xzf /tmp/exhibition_source.tar.gz -C /workspace && echo SOURCES_OK\r"
+    set timeout 300
+    wait_for "SOURCES_OK"
+    set timeout 600
+} else {
+    send "echo 'Source images already on volume — skipping download'; echo SOURCES_OK\r"
+    wait_for "SOURCES_OK"
 }
 
-send "ls -lh /workspace/output/gh0st_flux_lora_v2/gh0st_flux_lora_v2.safetensors && echo LORA_VERIFY_OK\r"
-ok "LORA_VERIFY_OK"
+# LoRA — only if URL provided
+if {"\$url_lora" ne ""} {
+    send "echo 'Downloading LoRA...' && mkdir -p /workspace/output/gh0st_flux_lora_v2 && wget -q '\$url_lora' -O /tmp/lora.tar.gz && tar -xzf /tmp/lora.tar.gz -C /workspace/output/gh0st_flux_lora_v2/ && echo LORA_OK\r"
+    set timeout 600
+    wait_for "LORA_OK"
+} else {
+    send "echo 'LoRA already on volume — skipping download'; echo LORA_OK\r"
+    wait_for "LORA_OK"
+}
+
+send "ls -lh /workspace/generate_exhibition.py /workspace/output/gh0st_flux_lora_v2/gh0st_flux_lora_v2.safetensors && echo VERIFY_OK\r"
+wait_for "VERIFY_OK"
 
 # HF token
 send "mkdir -p /root/.huggingface /root/.cache/huggingface && printf '%s' '\$hf_token' > /root/.huggingface/token && printf '%s' '\$hf_token' > /root/.cache/huggingface/token && export HF_TOKEN='\$hf_token'; echo TOKEN_OK\r"
-ok "TOKEN_OK"
+wait_for "TOKEN_OK"
 
-# Clean macOS xattr dirs
 send "find /workspace/exhibition_source -name '._*' -delete 2>/dev/null; echo CLEAN_OK\r"
-ok "CLEAN_OK"
+wait_for "CLEAN_OK"
 
 # Kill any old session, launch fresh
-send "tmux kill-session -t exhibition 2>/dev/null || true; echo KILL_OK\r"
+send "tmux kill-session -t exhibition 2>/dev/null || true; sleep 1; echo KILL_OK\r"
 expect { "KILL_OK" {} timeout {} }
 expect -re {#\s}
 
 send "tmux new-session -d -s exhibition 'cd /workspace && HF_TOKEN='\$hf_token' python generate_exhibition.py --selection \$sel_file --output \$out_name 2>&1 | tee /workspace/exhibition.log; echo GENERATION_COMPLETE >> /workspace/exhibition.log'; echo LAUNCH_OK\r"
-ok "LAUNCH_OK"
+wait_for "LAUNCH_OK"
 
 send "sleep 5 && tail -15 /workspace/exhibition.log 2>/dev/null || echo '(log not started yet)'; echo TAIL_OK\r"
 set timeout 30
@@ -221,19 +259,10 @@ TCEOF
 chmod +x "$EXPECT_SCRIPT"
 
 expect "$EXPECT_SCRIPT" \
-    "$KEY" "$POD_HOST" "$URL_SOURCE" "$URL_LORA" \
+    "$KEY" "$POD_HOST" "$URL_SCRIPT" "$URL_SOURCE" "$URL_LORA" \
     "$HF_TOKEN" "$SELECTION_FILE" "$OUTPUT_NAME" 2>&1 | \
-  grep -v '^\[?2004' | \
-  sed 's/\x1b\[[0-9;]*[mKHF]//g' | \
-  sed 's/\r//' | \
-  grep -v '^$' | \
-  grep -v '^spawn ' | \
-  grep -v 'Warning:.*known_hosts' | \
-  grep -v 'RUNPOD.IO' | \
-  grep -v 'Enjoy your Pod' | \
-  grep -v '^--$' | \
-  grep -v 'exit$' | \
-  grep -v 'Connection to.*closed'
+  sed 's/\x1b\[[0-9;]*[mKHF]//g' | tr -d '\r' | \
+  grep -Ev '^\[.2004|^spawn |Warning.*known_hosts|RUNPOD.IO|Enjoy your Pod|^--$|^exit$|Connection to.*closed|^$'
 
 echo ""
 echo "=== [4/4] Exhibition generation launched ==="
