@@ -158,3 +158,47 @@ Images live on Google Drive, not in this repo.
 | `hold_frames` | 24 | 1 s hold per image at 24 fps |
 | `morph_frames` | 72 | 3 s morph within a set |
 | `between_frames` | 96 | 4 s morph between sets |
+
+---
+
+## Licenses
+
+**Code** (`LICENSE`) — MIT. Covers all scripts, notebooks, and tooling in this
+repo.
+
+**Assets** (`LICENSE-ASSETS`) — CC BY-NC-ND 4.0. Covers all visual materials
+in the `dataset/` directory.
+
+---
+
+## Forked repo: re-syncing after history rewrite
+
+The main-branch history was rewritten (Co-authored-by trailers stripped from
+all commits). If you have a fork or local clone of this repo, **your existing
+history is now diverged** from origin/main and you cannot fast-forward.
+
+Run these commands from inside your clone:
+
+```bash
+# Fetch the rewritten history from upstream
+git fetch origin
+
+# Hard-reset your local main to match — THIS DISCARDS any unpushed commits
+# on main. If you have local work, stash or branch it first.
+git checkout main
+git reset --hard origin/main
+
+# If you need to force-push the rewritten history to your own fork:
+git push --force-with-lease origin main
+```
+
+If you have commits of your own on top of the old history, rebase them onto
+the new base instead of resetting:
+
+```bash
+git fetch origin
+git rebase --onto origin/main <old-base-sha> main
+```
+
+where `<old-base-sha>` is the last shared commit SHA before your own work
+began (visible in `git log` before you fetch).

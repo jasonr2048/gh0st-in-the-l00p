@@ -1,6 +1,7 @@
 .DS_Store
 .idea/
-.claude/
+.claude/*
+!.claude/settings.json
 .venv/
 
 __pycache__/
